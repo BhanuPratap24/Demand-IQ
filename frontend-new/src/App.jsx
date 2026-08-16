@@ -187,6 +187,7 @@ function App() {
         "analytics/store-performance",
         "recommendations",
         "products",
+        "inventory",
         "sales",
       ];
 
@@ -220,8 +221,26 @@ function App() {
       setLowStock(getArray(data[3]));
       setStores(getArray(data[4]));
       setRecommendations(getArray(data[5]));
-      setProducts(getArray(data[6]));
-      setSales(getArray(data[7]));
+      const productList = getArray(data[6]);
+const inventoryList = getArray(data[7]);
+
+const productsWithStock = productList.map((product) => {
+  const inventory = inventoryList.find(
+    (item) =>
+      String(item.product_id) ===
+      String(product.product_id)
+  );
+
+  return {
+    ...product,
+    quantity: inventory
+      ? Number(inventory.current_stock || 0)
+      : 0,
+  };
+});
+
+setProducts(productsWithStock);
+setSales(getArray(data[8])); 
     } catch (err) {
       console.error(err);
 
@@ -997,94 +1016,553 @@ function App() {
   // PRODUCTS PAGE
   // ==========================================
 
-  const ProductsPage = () => (
-    <Page
-      title="Products"
-      subtitle="Manage your product catalog"
-    >
+  const ProductsPage = () => {
+    const [showForm, setShowForm] = useState(false);
 
-      <div style={pageStyles.grid}>
+    const [productForm, setProductForm] = useState({
+      product_id: "",
+      product_name: "",
+      category: "",
+      price: "",
+      cost: "",
+      quantity: "",
+      store_id: "",
+      expiry_date: "",
+    });
 
-        {products.length === 0 ? (
+    const [productMessage, setProductMessage] = useState("");
+    const [productError, setProductError] = useState("");
+    const [productSaving, setProductSaving] = useState(false);
 
-          <div style={pageStyles.empty}>
-            No products found in database.
+    const handleProductChange = (e) => {
+      const { name, value } = e.target;
+
+      setProductForm((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    };
+
+    const handleAddProduct = async (e) => {
+      e.preventDefault();
+
+      try {
+        setProductSaving(true);
+        setProductMessage("");
+        setProductError("");
+
+        const token = localStorage.getItem("demandiq_token");
+
+        const productData = {
+          product_id: productForm.product_id.trim(),
+          product_name: productForm.product_name.trim(),
+          category: productForm.category.trim(),
+          price: Number(productForm.price),
+          cost: Number(productForm.cost),
+          quantity: Number(productForm.quantity),
+          expiry_date: productForm.expiry_date || null,
+        };
+
+        if (!productData.product_id || !productData.product_name) {
+          throw new Error("Product ID and Product Name are required");
+        }
+
+        if (!Number.isFinite(productData.quantity) || productData.quantity < 0) {
+          throw new Error("Quantity must be 0 or greater");
+        }
+
+        if (!productForm.store_id.trim()) {
+          throw new Error("Store ID is required");
+        }
+
+        // =====================================
+        // STEP 1: CREATE PRODUCT
+        // =====================================
+
+        const response = await fetch(`${API}/products`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token
+              ? {
+                  Authorization: `Bearer ${token}`,
+                }
+              : {}),
+          },
+          body: JSON.stringify(productData),
+        });
+
+        const data = await response.json();
+
+        // =====================================
+        // STEP 2: PRODUCT ALREADY EXISTS
+        // =====================================
+
+        if (response.status === 409) {
+          const inventoryResponse = await fetch(`${API}/inventory`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token
+                ? {
+                    Authorization: `Bearer ${token}`,
+                  }
+                : {}),
+            },
+            body: JSON.stringify({
+              product_id: productData.product_id,
+              store_id: productForm.store_id.trim(),
+              current_stock: productData.quantity,
+              minimum_stock: 10,
+            }),
+          });
+
+          const inventoryData = await inventoryResponse.json();
+
+          if (!inventoryResponse.ok) {
+            throw new Error(
+              inventoryData.message || "Failed to update inventory"
+            );
+          }
+
+          setProductMessage(
+            `Existing product found. Added ${productData.quantity} units. Current stock: ${inventoryData.current_stock}`
+          );
+        } else {
+          // =====================================
+          // STEP 3: NEW PRODUCT
+          // =====================================
+
+          if (!response.ok) {
+            throw new Error(
+              data.message || "Failed to add product"
+            );
+          }
+
+          // =====================================
+          // STEP 4: CREATE INITIAL INVENTORY
+          // =====================================
+
+          const inventoryResponse = await fetch(`${API}/inventory`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token
+                ? {
+                    Authorization: `Bearer ${token}`,
+                  }
+                : {}),
+            },
+            body: JSON.stringify({
+              product_id: productData.product_id,
+              store_id: productForm.store_id.trim(),
+              current_stock: productData.quantity,
+              minimum_stock: 10,
+            }),
+          });
+
+          const inventoryData = await inventoryResponse.json();
+
+          if (!inventoryResponse.ok) {
+            throw new Error(
+              inventoryData.message ||
+                "Product created but inventory could not be added"
+            );
+          }
+
+          setProductMessage(
+            `Product added successfully with ${inventoryData.current_stock} units in stock.`
+          );
+        }
+
+        // =====================================
+        // RESET FORM
+        // =====================================
+
+        setProductForm({
+          product_id: "",
+          product_name: "",
+          category: "",
+          price: "",
+          cost: "",
+          quantity: "",
+          store_id: "",
+          expiry_date: "",
+        });
+
+        setShowForm(false);
+
+        // Refresh dashboard/product data
+        await fetchData();
+      } catch (err) {
+        console.error("Add Product Error:", err);
+
+        setProductError(
+          err.message || "Failed to add product"
+        );
+      } finally {
+        setProductSaving(false);
+      }
+    };
+
+    return (
+      <Page
+        title="Products"
+        subtitle="Manage your product catalog"
+      >
+
+        {/* ============================= */}
+        {/* HEADER */}
+        {/* ============================= */}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "24px",
+            gap: "16px",
+            flexWrap: "wrap",
+          }}
+        >
+
+          <div>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "22px",
+              }}
+            >
+              Your Products
+            </h2>
+
+            <p
+              style={{
+                marginTop: "6px",
+                opacity: 0.7,
+              }}
+            >
+              Add and manage products used for
+              demand forecasting.
+            </p>
           </div>
 
-        ) : (
+          <button
+            onClick={() => {
+              setShowForm(!showForm);
+              setProductMessage("");
+              setProductError("");
+            }}
+            style={{
+              padding: "12px 20px",
+              border: "none",
+              borderRadius: "10px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+              background: "#2563eb",
+              color: "white",
+            }}
+          >
+            {showForm ? "✕ Close" : "+ Add Product"}
+          </button>
 
-          products.map(
-            (product, index) => (
+        </div>
 
-              <div
-                key={index}
-                style={pageStyles.card}
-              >
+        {/* ============================= */}
+        {/* SUCCESS MESSAGE */}
+        {/* ============================= */}
 
-                <div
-                  style={pageStyles.cardTop}
-                >
-
-                  <div
-                    style={pageStyles.productIcon}
-                  >
-                    {product.product_name
-                      ?.charAt(0)
-                      ?.toUpperCase() || "P"}
-                  </div>
-
-                  <span
-                    style={pageStyles.badge}
-                  >
-                    {product.product_id}
-                  </span>
-
-                </div>
-
-                <h3>
-                  {product.product_name ||
-                    product.name ||
-                    "Unnamed Product"}
-                </h3>
-
-                <p>
-                  {product.category ||
-                    "General"}
-                </p>
-
-                <div
-                  style={pageStyles.row}
-                >
-                  <span>
-                    Price
-                  </span>
-
-                  <strong>
-                    {money(product.price)}
-                  </strong>
-                </div>
-
-                <div
-                  style={pageStyles.row}
-                >
-                  <span>
-                    Cost
-                  </span>
-
-                  <strong>
-                    {money(product.cost)}
-                  </strong>
-                </div>
-
-              </div>
-            )
-          )
+        {productMessage && (
+          <div
+            style={{
+              padding: "14px 18px",
+              marginBottom: "20px",
+              borderRadius: "10px",
+              background: "#dcfce7",
+              color: "#166534",
+              fontWeight: "600",
+            }}
+          >
+            ✓ {productMessage}
+          </div>
         )}
 
-      </div>
+        {/* ============================= */}
+        {/* ERROR MESSAGE */}
+        {/* ============================= */}
 
-    </Page>
-  );
+        {productError && (
+          <div
+            style={{
+              padding: "14px 18px",
+              marginBottom: "20px",
+              borderRadius: "10px",
+              background: "#fee2e2",
+              color: "#991b1b",
+              fontWeight: "600",
+            }}
+          >
+            ⚠ {productError}
+          </div>
+        )}
+
+        {/* ============================= */}
+        {/* ADD PRODUCT FORM */}
+        {/* ============================= */}
+
+        {showForm && (
+          <form
+            onSubmit={handleAddProduct}
+            style={{
+              padding: "24px",
+              marginBottom: "30px",
+              borderRadius: "16px",
+              background: "#ffffff",
+              boxShadow:
+                "0 8px 30px rgba(0,0,0,0.08)",
+            }}
+          >
+
+            <h3
+              style={{
+                marginTop: 0,
+                marginBottom: "20px",
+              }}
+            >
+              Add New Product
+            </h3>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "18px",
+              }}
+            >
+
+              {/* Product ID */}
+              <div>
+                <label>Product ID</label>
+                <input
+                  name="product_id"
+                  value={productForm.product_id}
+                  onChange={handleProductChange}
+                  placeholder="Product ID (e.g. P013)"
+                  required
+                  style={productInputStyle}
+                />
+              </div>
+
+              {/* Product Name */}
+              <div>
+                <label>Product Name</label>
+                <input
+                  name="product_name"
+                  value={productForm.product_name}
+                  onChange={handleProductChange}
+                  placeholder="Product Name (e.g. Coca Cola 500ml)"
+                  required
+                  style={productInputStyle}
+                />
+              </div>
+
+              {/* Category */}
+              <div>
+                <label>Category</label>
+                <input
+                  name="category"
+                  value={productForm.category}
+                  onChange={handleProductChange}
+                  placeholder="Category (e.g. Beverages)"
+                  style={productInputStyle}
+                />
+              </div>
+
+              {/* Price */}
+              <div>
+                <label>Selling Price</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="price"
+                  value={productForm.price}
+                  onChange={handleProductChange}
+                  placeholder="Selling Price (40)"
+                  required
+                  style={productInputStyle}
+                />
+              </div>
+
+              {/* Cost */}
+              <div>
+                <label>Product Cost</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="cost"
+                  value={productForm.cost}
+                  onChange={handleProductChange}
+                  placeholder="Product Cost (25.00)"
+                  required
+                  style={productInputStyle}
+                />
+              </div>
+
+              {/* Store ID */}
+              <div>
+                <label>Store ID</label>
+                <input
+                  name="store_id"
+                  value={productForm.store_id}
+                  onChange={handleProductChange}
+                  placeholder="Store ID (e.g. S001)"
+                  required
+                  style={productInputStyle}
+                />
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label>Quantity</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  name="quantity"
+                  value={productForm.quantity}
+                  onChange={handleProductChange}
+                  placeholder="Quantity (e.g. 100)"
+                  required
+                  style={productInputStyle}
+                />
+              </div>
+
+              {/* Expiry */}
+              <div>
+                <label>Expiry Date</label>
+                <input
+                  type="date"
+                  name="expiry_date"
+                  value={productForm.expiry_date}
+                  onChange={handleProductChange}
+                  style={productInputStyle}
+                />
+              </div>
+
+            </div>
+
+            <button
+              type="submit"
+              disabled={productSaving}
+              style={{
+                marginTop: "24px",
+                padding: "12px 24px",
+                border: "none",
+                borderRadius: "10px",
+                cursor: productSaving
+                  ? "not-allowed"
+                  : "pointer",
+                fontWeight: "600",
+                background: "#16a34a",
+                color: "white",
+              }}
+            >
+              {productSaving
+                ? "Saving..."
+                : "✓ Save Product"}
+            </button>
+
+          </form>
+        )}
+
+        {/* ============================= */}
+        {/* PRODUCT LIST */}
+        {/* ============================= */}
+
+        <div style={pageStyles.grid}>
+
+          {products.length === 0 ? (
+            <div style={pageStyles.empty}>
+              No products found in database.
+            </div>
+          ) : (
+            products.map(
+              (product, index) => (
+                <div
+                  key={index}
+                  style={pageStyles.card}
+                >
+                  <div
+                    style={pageStyles.cardTop}
+                  >
+                    <div
+                      style={pageStyles.productIcon}
+                    >
+                      {product.product_name
+                        ?.charAt(0)
+                        ?.toUpperCase() || "P"}
+                    </div>
+
+                    <span
+                      style={pageStyles.badge}
+                    >
+                      {product.product_id}
+                    </span>
+                  </div>
+
+                  <h3>
+                    {product.product_name ||
+                      product.name ||
+                      "Unnamed Product"}
+                  </h3>
+
+                  <p>
+                    {product.category ||
+                      "General"}
+                  </p>
+
+                  <div
+                    style={pageStyles.row}
+                  >
+                    <span>Price</span>
+                    <strong>
+                      {money(product.price)}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={pageStyles.row}
+                  >
+                    <span>Cost</span>
+                    
+                    <strong>
+                      {money(product.cost)}
+                    </strong>
+                  </div>
+                  <div
+                     style={{...pageStyles.row,
+                        marginTop: "8px",}}
+>
+  <span>Quantity</span>
+
+  <strong>
+    {product.quantity ?? 0} units
+  </strong>
+</div>
+                </div>
+              )
+            )
+          )}
+
+        </div>
+
+      </Page>
+    );
+  };
 
   // ==========================================
   // SALES PAGE
@@ -1556,7 +2034,16 @@ function App() {
 // ==========================================
 // INLINE PAGE STYLES
 // ==========================================
-
+const productInputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "11px 13px",
+  marginTop: "7px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  fontSize: "14px",
+  outline: "none",
+};
 const pageStyles = {
 
   grid: {

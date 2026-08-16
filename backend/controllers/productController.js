@@ -9,6 +9,7 @@ const addProduct = async (req, res) => {
 
         const product = req.body;
 
+        // Basic validation
         if (!product.product_id || !product.product_name) {
             return res.status(400).json({
                 success: false,
@@ -16,7 +17,34 @@ const addProduct = async (req, res) => {
             });
         }
 
-        const result = await Product.createProduct(product);
+        // =====================================
+        // CHECK IF PRODUCT ALREADY EXISTS
+        // =====================================
+
+        const existingProduct =
+            await Product.getProductById(product.product_id);
+
+        // =====================================
+        // PRODUCT ALREADY EXISTS
+        // =====================================
+
+        if (existingProduct) {
+
+            return res.status(409).json({
+                success: false,
+                existingProduct: true,
+                message:
+                    "Product already exists. Add quantity to increase its stock.",
+                product_id: product.product_id
+            });
+        }
+
+        // =====================================
+        // CREATE NEW PRODUCT
+        // =====================================
+
+        const result =
+            await Product.createProduct(product);
 
         res.status(201).json({
             success: true,
@@ -27,7 +55,10 @@ const addProduct = async (req, res) => {
 
     } catch (error) {
 
-        console.error("Add Product Error:", error.message);
+        console.error(
+            "Add Product Error:",
+            error.message
+        );
 
         res.status(500).json({
             success: false,
@@ -43,9 +74,11 @@ const addProduct = async (req, res) => {
 // =====================================
 
 const getProducts = async (req, res) => {
+
     try {
 
-        const products = await Product.getProducts();
+        const products =
+            await Product.getProducts();
 
         res.json({
             success: true,
@@ -55,7 +88,10 @@ const getProducts = async (req, res) => {
 
     } catch (error) {
 
-        console.error("Get Products Error:", error.message);
+        console.error(
+            "Get Products Error:",
+            error.message
+        );
 
         res.status(500).json({
             success: false,
@@ -71,13 +107,17 @@ const getProducts = async (req, res) => {
 // =====================================
 
 const getProduct = async (req, res) => {
+
     try {
 
-        const product = await Product.getProductById(
-            req.params.productId
-        );
+        const product =
+            await Product.getProductById(
+                req.params.productId
+            );
 
+        // Product not found
         if (!product) {
+
             return res.status(404).json({
                 success: false,
                 message: "Product not found"
@@ -91,7 +131,10 @@ const getProduct = async (req, res) => {
 
     } catch (error) {
 
-        console.error("Get Product Error:", error.message);
+        console.error(
+            "Get Product Error:",
+            error.message
+        );
 
         res.status(500).json({
             success: false,
