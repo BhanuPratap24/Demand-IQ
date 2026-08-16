@@ -1,0 +1,1681 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useState } from "react";
+import "./App.css";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import Dashboard from "./pages/Dashboard";
+
+const API = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+
+// ==========================================
+// PROTECTED ROUTE COMPONENT
+// ==========================================
+
+function ProtectedRoute({ children }) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        return <Navigate to="/login" />;
+    }
+    return children;
+}
+
+// ==========================================
+// MAIN APP COMPONENT
+// ==========================================
+
+function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    !!localStorage.getItem("token")
+  );
+
+  const [authMode, setAuthMode] = useState("login");
+
+  const [authForm, setAuthForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    password: "",
+    city: "",
+    address: "",
+  });
+
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // ==========================================
+  // DASHBOARD STATE
+  // ==========================================
+
+  const [page, setPage] = useState("dashboard");
+
+  const [summary, setSummary] = useState({});
+  const [topProducts, setTopProducts] = useState([]);
+  const [salesTrend, setSalesTrend] = useState([]);
+  const [lowStock, setLowStock] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
+
+  const [products, setProducts] = useState([]);
+  const [sales, setSales] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // ==========================================
+  // HELPERS
+  // ==========================================
+
+  const money = (value) =>
+    `₹${Number(value || 0).toLocaleString("en-IN")}`;
+
+  const getArray = (result) => {
+    if (Array.isArray(result?.data)) return result.data;
+    return [];
+  };
+
+  // ==========================================
+  // AUTH
+  // ==========================================
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+
+    try {
+      setAuthLoading(true);
+      setAuthError("");
+
+      const endpoint =
+        authMode === "login"
+          ? `${API}/auth/login`
+          : `${API}/auth/signup`;
+
+      const body =
+        authMode === "login"
+          ? {
+              email: authForm.email,
+              password: authForm.password,
+            }
+          : authForm;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Authentication failed"
+        );
+      }
+
+      if (!data.token) {
+        throw new Error("Token not received from server");
+      }
+
+      localStorage.setItem(
+        "demandiq_token",
+        data.token
+      );
+
+      if (data.customer) {
+        localStorage.setItem(
+          "demandiq_customer",
+          JSON.stringify(data.customer)
+        );
+      }
+
+      setIsLoggedIn(true);
+      setPage("dashboard");
+    } catch (err) {
+      console.error(err);
+
+      setAuthError(
+        err.message ||
+          "Authentication failed. Please try again."
+      );
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem("demandiq_token");
+    localStorage.removeItem("demandiq_customer");
+
+    setIsLoggedIn(false);
+    setPage("dashboard");
+    setAuthMode("login");
+
+    setAuthForm({
+      full_name: "",
+      email: "",
+      phone: "",
+      password: "",
+      city: "",
+      address: "",
+    });
+  };
+
+  // ==========================================
+  // LOAD ALL DATA
+  // ==========================================
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const token =
+        localStorage.getItem("demandiq_token");
+
+      const headers = token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {};
+
+      const endpoints = [
+        "analytics/summary",
+        "analytics/top-products",
+        "analytics/sales-trend",
+        "analytics/low-stock",
+        "analytics/store-performance",
+        "recommendations",
+        "products",
+        "sales",
+      ];
+
+      const responses = await Promise.all(
+        endpoints.map((endpoint) =>
+          fetch(`${API}/${endpoint}`, {
+            headers,
+          })
+        )
+      );
+
+      const failed = responses.find(
+        (response) => !response.ok
+      );
+
+      if (failed) {
+        throw new Error(
+          `API failed with status ${failed.status}`
+        );
+      }
+
+      const data = await Promise.all(
+        responses.map((response) =>
+          response.json()
+        )
+      );
+
+      setSummary(data[0]?.data || {});
+      setTopProducts(getArray(data[1]));
+      setSalesTrend(getArray(data[2]));
+      setLowStock(getArray(data[3]));
+      setStores(getArray(data[4]));
+      setRecommendations(getArray(data[5]));
+      setProducts(getArray(data[6]));
+      setSales(getArray(data[7]));
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        "Backend connection nahi ho raha. Check karo Node server port 3000 par running hai."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================
+  // AUTH -> DASHBOARD
+  // ==========================================
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchData();
+    } else {
+      setLoading(false);
+    }
+  }, [isLoggedIn]);
+
+  // ==========================================
+  // LOGIN / SIGNUP SCREEN
+  // ==========================================
+
+  if (!isLoggedIn) {
+    return (
+      <div className="auth-container">
+        <div className="auth-card">
+
+          <div className="brand-logo">
+            D
+          </div>
+
+          <h1>DemandIQ</h1>
+
+          <p className="auth-subtitle">
+            Demand Intelligence Platform
+          </p>
+
+          <form onSubmit={handleAuth}>
+
+            {authMode === "signup" && (
+              <>
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  value={authForm.full_name}
+                  onChange={(e) =>
+                    setAuthForm({
+                      ...authForm,
+                      full_name: e.target.value,
+                    })
+                  }
+                  required
+                />
+
+                <input
+                  type="text"
+                  placeholder="Phone"
+                  value={authForm.phone}
+                  onChange={(e) =>
+                    setAuthForm({
+                      ...authForm,
+                      phone: e.target.value,
+                    })
+                  }
+                  required
+                />
+
+                <input
+                  type="text"
+                  placeholder="City"
+                  value={authForm.city}
+                  onChange={(e) =>
+                    setAuthForm({
+                      ...authForm,
+                      city: e.target.value,
+                    })
+                  }
+                  required
+                />
+
+                <textarea
+                  placeholder="Address"
+                  value={authForm.address}
+                  onChange={(e) =>
+                    setAuthForm({
+                      ...authForm,
+                      address: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </>
+            )}
+
+            <input
+              type="email"
+              placeholder="Email"
+              value={authForm.email}
+              onChange={(e) =>
+                setAuthForm({
+                  ...authForm,
+                  email: e.target.value,
+                })
+              }
+              required
+            />
+
+            <input
+              type="password"
+              placeholder="Password"
+              value={authForm.password}
+              onChange={(e) =>
+                setAuthForm({
+                  ...authForm,
+                  password: e.target.value,
+                })
+              }
+              required
+            />
+
+            {authError && (
+              <div className="auth-error">
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={authLoading}
+            >
+              {authLoading
+                ? "Please wait..."
+                : authMode === "login"
+                ? "Login"
+                : "Create Account"}
+            </button>
+
+          </form>
+
+          <div className="auth-switch">
+
+            {authMode === "login"
+              ? "Don't have an account?"
+              : "Already have an account?"}
+
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode(
+                  authMode === "login"
+                    ? "signup"
+                    : "login"
+                );
+
+                setAuthError("");
+              }}
+            >
+              {authMode === "login"
+                ? "Sign Up"
+                : "Login"}
+            </button>
+
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // NAVIGATION
+  // ==========================================
+
+  const navItems = [
+    {
+      id: "dashboard",
+      icon: "▦",
+      label: "Dashboard",
+    },
+    {
+      id: "products",
+      icon: "▣",
+      label: "Products",
+    },
+    {
+      id: "sales",
+      icon: "↗",
+      label: "Sales",
+    },
+    {
+      id: "stores",
+      icon: "⌂",
+      label: "Stores",
+    },
+    {
+      id: "recommendations",
+      icon: "◈",
+      label: "Recommendations",
+    },
+  ];
+
+  // ==========================================
+  // LOADING
+  // ==========================================
+
+  if (loading) {
+    return (
+      <div className="loading-page">
+        <div className="loading-logo">D</div>
+
+        <h1>DemandIQ</h1>
+
+        <p>
+          Loading intelligence dashboard...
+        </p>
+
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // ERROR
+  // ==========================================
+
+  if (error) {
+    return (
+      <div className="error-page">
+
+        <div className="error-card">
+
+          <div className="error-icon">
+            !
+          </div>
+
+          <h1>
+            Connection Error
+          </h1>
+
+          <p>
+            {error}
+          </p>
+
+          <button onClick={fetchData}>
+            Try Again
+          </button>
+
+          <button
+            onClick={logout}
+            style={{
+              marginTop: "10px",
+              background: "#dc2626",
+            }}
+          >
+            Logout
+          </button>
+
+        </div>
+
+      </div>
+    );
+  }
+
+  // ==========================================
+  // DASHBOARD
+  // ==========================================
+
+  const Dashboard = () => (
+    <>
+      {/* KPI */}
+      <section className="kpi-grid">
+
+        <div className="kpi-card">
+          <div className="kpi-top">
+            <span>Total Products</span>
+            <div className="kpi-icon blue">
+              ▣
+            </div>
+          </div>
+
+          <strong>
+            {summary.total_products || 0}
+          </strong>
+
+          <small>
+            Products in catalog
+          </small>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-top">
+            <span>Total Stock</span>
+
+            <div className="kpi-icon purple">
+              ◫
+            </div>
+          </div>
+
+          <strong>
+            {summary.total_stock || 0}
+          </strong>
+
+          <small>
+            Units currently available
+          </small>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-top">
+            <span>Total Revenue</span>
+
+            <div className="kpi-icon green">
+              ₹
+            </div>
+          </div>
+
+          <strong>
+            {money(summary.total_revenue)}
+          </strong>
+
+          <small>
+            Sales revenue generated
+          </small>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-top">
+            <span>Total Profit</span>
+
+            <div className="kpi-icon orange">
+              ↗
+            </div>
+          </div>
+
+          <strong>
+            {money(summary.total_profit)}
+          </strong>
+
+          <small>
+            Estimated business profit
+          </small>
+        </div>
+
+      </section>
+
+      {/* MAIN ANALYTICS */}
+      <section className="dashboard-grid">
+
+        {/* SALES TREND */}
+        <div className="panel sales-panel">
+
+          <div className="panel-header">
+
+            <div>
+              <h2>
+                Sales Trend
+              </h2>
+
+              <p>
+                Recent sales performance
+              </p>
+            </div>
+
+            <div className="panel-tag">
+              LIVE DATA
+            </div>
+
+          </div>
+
+          {salesTrend.length === 0 ? (
+            <div className="empty">
+              No sales trend data available.
+            </div>
+          ) : (
+            <div className="sales-chart">
+
+              {salesTrend.map(
+                (item, index) => {
+
+                  const maxUnits =
+                    Math.max(
+                      ...salesTrend.map(
+                        (x) =>
+                          Number(
+                            x.units_sold || 0
+                          )
+                      ),
+                      1
+                    );
+
+                  const height =
+                    (Number(
+                      item.units_sold || 0
+                    ) /
+                      maxUnits) *
+                    100;
+
+                  return (
+                    <div
+                      className="chart-column"
+                      key={index}
+                    >
+
+                      <div className="chart-value">
+                        {item.units_sold || 0}
+                      </div>
+
+                      <div className="bar-area">
+
+                        <div
+                          className="sales-bar"
+                          style={{
+                            height: `${Math.max(
+                              height,
+                              5
+                            )}%`,
+                          }}
+                        ></div>
+
+                      </div>
+
+                      <small>
+                        {new Date(
+                          item.sale_date
+                        ).toLocaleDateString(
+                          "en-IN",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                          }
+                        )}
+                      </small>
+
+                    </div>
+                  );
+                }
+              )}
+
+            </div>
+          )}
+
+        </div>
+
+        {/* TOP PRODUCTS */}
+        <div className="panel">
+
+          <div className="panel-header">
+
+            <div>
+              <h2>
+                Top Products
+              </h2>
+
+              <p>
+                Highest selling products
+              </p>
+            </div>
+
+            <span className="count-badge">
+              {topProducts.length}
+            </span>
+
+          </div>
+
+          <div className="product-list">
+
+            {topProducts
+              .slice(0, 6)
+              .map((product, index) => (
+
+                <div
+                  className="product-item"
+                  key={index}
+                >
+
+                  <div className="rank">
+                    {String(
+                      index + 1
+                    ).padStart(2, "0")}
+                  </div>
+
+                  <div className="product-details">
+
+                    <strong>
+                      {product.product_name ||
+                        product.name ||
+                        product.product_id}
+                    </strong>
+
+                    <small>
+                      {product.product_id}
+                    </small>
+
+                  </div>
+
+                  <div className="units">
+
+                    {product.units_sold || 0}
+
+                    <small>
+                      {" "}units
+                    </small>
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            {topProducts.length === 0 && (
+              <div className="empty">
+                No products available.
+              </div>
+            )}
+
+          </div>
+
+        </div>
+
+      </section>
+
+      {/* LOWER */}
+      <section className="three-grid">
+
+        {/* INVENTORY */}
+        <div className="panel">
+
+          <div className="panel-header">
+
+            <div>
+              <h2>
+                Inventory Alerts
+              </h2>
+
+              <p>
+                Low stock products
+              </p>
+            </div>
+
+            <div className="alert-count">
+              {lowStock.length}
+            </div>
+
+          </div>
+
+          {lowStock.length === 0 ? (
+
+            <div className="healthy">
+
+              <div className="healthy-icon">
+                ✓
+              </div>
+
+              <div>
+
+                <strong>
+                  Inventory Healthy
+                </strong>
+
+                <p>
+                  No low-stock products
+                  detected.
+                </p>
+
+              </div>
+
+            </div>
+
+          ) : (
+
+            <div className="alert-list">
+
+              {lowStock
+                .slice(0, 5)
+                .map((item, index) => (
+
+                  <div
+                    className="alert-item"
+                    key={index}
+                  >
+
+                    <div>
+
+                      <strong>
+                        {item.product_name ||
+                          item.product_id}
+                      </strong>
+
+                      <small>
+                        {item.product_id}
+                      </small>
+
+                    </div>
+
+                    <span>
+                      {item.stock ||
+                        item.quantity ||
+                        0}{" "}
+                      left
+                    </span>
+
+                  </div>
+
+                ))}
+
+            </div>
+
+          )}
+
+        </div>
+
+        {/* STORES */}
+        <div className="panel">
+
+          <div className="panel-header">
+
+            <div>
+
+              <h2>
+                Store Performance
+              </h2>
+
+              <p>
+                Store-wise sales
+              </p>
+
+            </div>
+
+          </div>
+
+          <div className="store-list">
+
+            {stores
+              .slice(0, 5)
+              .map((store, index) => (
+
+                <div
+                  className="store-item"
+                  key={index}
+                >
+
+                  <div className="store-rank">
+                    {index + 1}
+                  </div>
+
+                  <div className="store-details">
+
+                    <strong>
+                      {store.store_id}
+                    </strong>
+
+                    <small>
+                      {store.units_sold || 0}{" "}
+                      units sold
+                    </small>
+
+                  </div>
+
+                  <strong className="store-revenue">
+                    {money(store.revenue)}
+                  </strong>
+
+                </div>
+
+              ))}
+
+            {stores.length === 0 && (
+              <div className="empty">
+                No store data available.
+              </div>
+            )}
+
+          </div>
+
+        </div>
+
+        {/* AI */}
+        <div className="panel ai-panel">
+
+          <div className="panel-header">
+
+            <div>
+
+              <h2>
+                AI Recommendations
+              </h2>
+
+              <p>
+                Demand-driven insights
+              </p>
+
+            </div>
+
+            <div className="ai-badge">
+              AI
+            </div>
+
+          </div>
+
+          {recommendations.length === 0 ? (
+
+            <div className="ai-empty">
+
+              <div className="ai-big">
+                AI
+              </div>
+
+              <strong>
+                No recommendations yet
+              </strong>
+
+              <p>
+                More sales data will
+                generate better demand
+                insights.
+              </p>
+
+            </div>
+
+          ) : (
+
+            <div className="recommendation-list">
+
+              {recommendations
+                .slice(0, 5)
+                .map((item, index) => (
+
+                  <div
+                    className="recommendation-item"
+                    key={index}
+                  >
+
+                    <div className="recommendation-icon">
+                      ✦
+                    </div>
+
+                    <div>
+
+                      <strong>
+                        {item.product_name ||
+                          item.product_id ||
+                          "Product"}
+                      </strong>
+
+                      <p>
+                        {item.message ||
+                          item.recommendation ||
+                          "Demand signal detected."}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                ))}
+
+            </div>
+
+          )}
+
+        </div>
+
+      </section>
+    </>
+  );
+
+  // ==========================================
+  // PRODUCTS PAGE
+  // ==========================================
+
+  const ProductsPage = () => (
+    <Page
+      title="Products"
+      subtitle="Manage your product catalog"
+    >
+
+      <div style={pageStyles.grid}>
+
+        {products.length === 0 ? (
+
+          <div style={pageStyles.empty}>
+            No products found in database.
+          </div>
+
+        ) : (
+
+          products.map(
+            (product, index) => (
+
+              <div
+                key={index}
+                style={pageStyles.card}
+              >
+
+                <div
+                  style={pageStyles.cardTop}
+                >
+
+                  <div
+                    style={pageStyles.productIcon}
+                  >
+                    {product.product_name
+                      ?.charAt(0)
+                      ?.toUpperCase() || "P"}
+                  </div>
+
+                  <span
+                    style={pageStyles.badge}
+                  >
+                    {product.product_id}
+                  </span>
+
+                </div>
+
+                <h3>
+                  {product.product_name ||
+                    product.name ||
+                    "Unnamed Product"}
+                </h3>
+
+                <p>
+                  {product.category ||
+                    "General"}
+                </p>
+
+                <div
+                  style={pageStyles.row}
+                >
+                  <span>
+                    Price
+                  </span>
+
+                  <strong>
+                    {money(product.price)}
+                  </strong>
+                </div>
+
+                <div
+                  style={pageStyles.row}
+                >
+                  <span>
+                    Cost
+                  </span>
+
+                  <strong>
+                    {money(product.cost)}
+                  </strong>
+                </div>
+
+              </div>
+            )
+          )
+        )}
+
+      </div>
+
+    </Page>
+  );
+
+  // ==========================================
+  // SALES PAGE
+  // ==========================================
+
+  const SalesPage = () => (
+    <Page
+      title="Sales"
+      subtitle="View real sales transactions"
+    >
+
+      <div
+        style={pageStyles.tableWrapper}
+      >
+
+        {sales.length === 0 ? (
+
+          <div style={pageStyles.empty}>
+            No sales records found.
+          </div>
+
+        ) : (
+
+          <table
+            style={pageStyles.table}
+          >
+
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Product</th>
+                <th>Store</th>
+                <th>Date</th>
+                <th>Units</th>
+                <th>Sale Price</th>
+                <th>Revenue</th>
+                <th>Profit</th>
+              </tr>
+            </thead>
+
+            <tbody>
+
+              {sales.map(
+                (sale, index) => (
+
+                  <tr key={index}>
+
+                    <td>
+                      {sale.id}
+                    </td>
+
+                    <td>
+                      <strong>
+                        {sale.product_id}
+                      </strong>
+                    </td>
+
+                    <td>
+                      {sale.store_id || "-"}
+                    </td>
+
+                    <td>
+                      {sale.sale_date
+                        ? new Date(
+                            sale.sale_date
+                          ).toLocaleDateString(
+                            "en-IN"
+                          )
+                        : "-"}
+                    </td>
+
+                    <td>
+                      {sale.units_sold || 0}
+                    </td>
+
+                    <td>
+                      {money(
+                        sale.selling_price
+                      )}
+                    </td>
+
+                    <td>
+                      {money(
+                        sale.revenue
+                      )}
+                    </td>
+
+                    <td>
+                      {money(
+                        sale.profit
+                      )}
+                    </td>
+
+                  </tr>
+
+                )
+              )}
+
+            </tbody>
+
+          </table>
+
+        )}
+
+      </div>
+
+    </Page>
+  );
+
+  // ==========================================
+  // STORES PAGE
+  // ==========================================
+
+  const StoresPage = () => (
+    <Page
+      title="Stores"
+      subtitle="Store-wise business performance"
+    >
+
+      <div style={pageStyles.grid}>
+
+        {stores.length === 0 ? (
+
+          <div style={pageStyles.empty}>
+            No store data available.
+          </div>
+
+        ) : (
+
+          stores.map(
+            (store, index) => (
+
+              <div
+                key={index}
+                style={pageStyles.card}
+              >
+
+                <div
+                  style={pageStyles.storeNumber}
+                >
+                  #{index + 1}
+                </div>
+
+                <h3>
+                  Store {store.store_id}
+                </h3>
+
+                <p>
+                  Performance overview
+                </p>
+
+                <div
+                  style={pageStyles.row}
+                >
+
+                  <span>
+                    Units Sold
+                  </span>
+
+                  <strong>
+                    {store.units_sold || 0}
+                  </strong>
+
+                </div>
+
+                <div
+                  style={pageStyles.row}
+                >
+
+                  <span>
+                    Revenue
+                  </span>
+
+                  <strong>
+                    {money(
+                      store.revenue
+                    )}
+                  </strong>
+
+                </div>
+
+              </div>
+            )
+          )
+        )}
+
+      </div>
+
+    </Page>
+  );
+
+  // ==========================================
+  // RECOMMENDATIONS PAGE
+  // ==========================================
+
+  const RecommendationsPage = () => (
+    <Page
+      title="AI Recommendations"
+      subtitle="Demand-driven business intelligence"
+    >
+
+      {recommendations.length === 0 ? (
+
+        <div style={pageStyles.empty}>
+          No recommendations available
+          yet.
+        </div>
+
+      ) : (
+
+        <div
+          style={
+            pageStyles.recommendationGrid
+          }
+        >
+
+          {recommendations.map(
+            (item, index) => (
+
+              <div
+                key={index}
+                style={pageStyles.aiCard}
+              >
+
+                <div
+                  style={pageStyles.aiNumber}
+                >
+                  {index + 1}
+                </div>
+
+                <div>
+
+                  <h3>
+                    {item.product_name ||
+                      item.product_id ||
+                      "Product"}
+                  </h3>
+
+                  <p>
+                    {item.message ||
+                      item.recommendation ||
+                      "Demand signal detected."}
+                  </p>
+
+                  {item.product_id && (
+                    <span
+                      style={pageStyles.badge}
+                    >
+                      {item.product_id}
+                    </span>
+                  )}
+
+                </div>
+
+              </div>
+            )
+          )}
+
+        </div>
+
+      )}
+
+    </Page>
+  );
+
+  // ==========================================
+  // PAGE COMPONENT
+  // ==========================================
+
+  function Page({
+    title,
+    subtitle,
+    children,
+  }) {
+    return (
+      <>
+        <header className="header">
+
+          <div>
+
+            <div className="small-label">
+              DEMANDIQ
+            </div>
+
+            <h1>
+              {title}
+            </h1>
+
+            <p>
+              {subtitle}
+            </p>
+
+          </div>
+
+          <div className="header-actions">
+
+            <div className="live-status">
+
+              <span></span>
+
+              Live
+
+            </div>
+
+            <button
+              className="refresh"
+              onClick={fetchData}
+            >
+              ↻ Refresh
+            </button>
+
+          </div>
+
+        </header>
+
+        {children}
+      </>
+    );
+  }
+
+  // ==========================================
+  // SELECT CURRENT PAGE
+  // ==========================================
+
+  const renderPage = () => {
+
+    switch (page) {
+
+      case "products":
+        return <ProductsPage />;
+
+      case "sales":
+        return <SalesPage />;
+
+      case "stores":
+        return <StoresPage />;
+
+      case "recommendations":
+        return (
+          <RecommendationsPage />
+        );
+
+      default:
+        return <Dashboard />;
+    }
+  };
+
+  // ==========================================
+  // MAIN UI
+  // ==========================================
+
+  return (
+    <div className="app">
+
+      {/* SIDEBAR */}
+      <aside className="sidebar">
+
+        <div className="brand">
+
+          <div className="brand-logo">
+            D
+          </div>
+
+          <div>
+
+            <h2>
+              DemandIQ
+            </h2>
+
+            <span>
+              Demand Intelligence
+            </span>
+
+          </div>
+
+        </div>
+
+        <div className="nav-title">
+          MAIN MENU
+        </div>
+
+        <nav>
+
+          {navItems.map(
+            (item) => (
+
+              <div
+                key={item.id}
+                className={`nav-item ${
+                  page === item.id
+                    ? "active"
+                    : ""
+                }`}
+                onClick={() =>
+                  setPage(item.id)
+                }
+                style={{
+                  cursor: "pointer",
+                }}
+              >
+
+                <span>
+                  {item.icon}
+                </span>
+
+                {item.label}
+
+              </div>
+
+            )
+          )}
+
+        </nav>
+
+        <div className="sidebar-bottom">
+
+          <div className="connection">
+
+            <span className="online-dot"></span>
+
+            <div>
+
+              <strong>
+                System Online
+              </strong>
+
+              <small>
+                Backend connected
+              </small>
+
+            </div>
+
+          </div>
+
+          <button
+            className="logout-btn"
+            onClick={logout}
+          >
+            Logout
+          </button>
+
+        </div>
+
+      </aside>
+
+      {/* MAIN */}
+      <main className="main">
+
+        {renderPage()}
+
+        <footer>
+
+          <span>
+            DemandIQ © 2026
+          </span>
+
+          <span>
+            Demand Intelligence Platform
+          </span>
+
+        </footer>
+
+      </main>
+
+    </div>
+  );
+}
+
+// ==========================================
+// INLINE PAGE STYLES
+// ==========================================
+
+const pageStyles = {
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(260px, 1fr))",
+    gap: "20px",
+  },
+
+  card: {
+    background: "#0d1424",
+    border: "1px solid #1b2940",
+    borderRadius: "16px",
+    padding: "24px",
+    color: "#e8eef8",
+    boxShadow:
+      "0 10px 30px rgba(0,0,0,0.18)",
+  },
+
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "20px",
+  },
+
+  productIcon: {
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background:
+      "linear-gradient(135deg,#2563eb,#7c3aed)",
+    fontSize: "20px",
+    fontWeight: "700",
+  },
+
+  badge: {
+    display: "inline-block",
+    padding: "5px 9px",
+    borderRadius: "7px",
+    background: "#18243a",
+    color: "#72a7ff",
+    fontSize: "12px",
+    fontWeight: "600",
+  },
+
+  row: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "11px 0",
+    borderTop:
+      "1px solid #1a2639",
+    color: "#8c9ab0",
+  },
+
+  tableWrapper: {
+    background: "#0d1424",
+    border:
+      "1px solid #1b2940",
+    borderRadius: "16px",
+    overflowX: "auto",
+  },
+
+  table: {
+    width: "100%",
+    borderCollapse:
+      "collapse",
+    color: "#e8eef8",
+    minWidth: "900px",
+  },
+
+  empty: {
+    padding: "60px 20px",
+    textAlign: "center",
+    background: "#0d1424",
+    border:
+      "1px solid #1b2940",
+    borderRadius: "16px",
+    color: "#8c9ab0",
+  },
+
+  storeNumber: {
+    color: "#6da4ff",
+    fontSize: "13px",
+    marginBottom: "10px",
+  },
+
+  recommendationGrid: {
+    display: "grid",
+    gap: "16px",
+  },
+
+  aiCard: {
+    display: "flex",
+    gap: "18px",
+    alignItems: "flex-start",
+    padding: "22px",
+    background:
+      "linear-gradient(135deg,#11142b,#10182a)",
+    border:
+      "1px solid #30265c",
+    borderRadius: "16px",
+  },
+
+  aiNumber: {
+    minWidth: "38px",
+    height: "38px",
+    borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#24174d",
+    color: "#b77cff",
+    fontWeight: "700",
+  },
+};
+
+export default App;
+
