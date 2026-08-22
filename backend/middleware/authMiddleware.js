@@ -4,62 +4,37 @@ const JWT_SECRET =
     process.env.JWT_SECRET || "demandiq_super_secret_2026";
 
 const authMiddleware = (req, res, next) => {
-    try {
 
-        // =====================================
-        // GET AUTHORIZATION HEADER
-        // =====================================
+    console.log("========== AUTH MIDDLEWARE HIT ==========");
+
+    try {
 
         const authHeader = req.headers.authorization;
 
+        console.log("AUTH HEADER EXISTS:", !!authHeader);
+
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            console.log("❌ NO BEARER TOKEN");
+
             return res.status(401).json({
                 success: false,
                 message: "Authentication token required"
             });
         }
 
-        // =====================================
-        // EXTRACT TOKEN
-        // =====================================
+        const token = authHeader.substring(7).trim();
 
-        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
 
-        if (!token) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication token missing"
-            });
-        }
+        console.log("JWT DECODED:", decoded);
 
-        // =====================================
-        // VERIFY JWT
-        // =====================================
-
-        const decoded = jwt.verify(
-            token,
-            JWT_SECRET
-        );
-
-        // =====================================
-        // CHECK CUSTOMER ID
-        // =====================================
-
-        if (!decoded.customer_id) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid token: customer ID missing"
-            });
-        }
-
-        // =====================================
-        // ATTACH USER TO REQUEST
-        // =====================================
-
-        req.user = decoded;
+        req.user = {
+            customer_id: Number(decoded.customer_id),
+            email: decoded.email
+        };
 
         console.log(
-            "Authenticated Customer:",
+            "✅ AUTH OK - Customer ID:",
             req.user.customer_id
         );
 
@@ -68,7 +43,7 @@ const authMiddleware = (req, res, next) => {
     } catch (error) {
 
         console.error(
-            "Auth middleware error:",
+            "❌ AUTH ERROR:",
             error.message
         );
 

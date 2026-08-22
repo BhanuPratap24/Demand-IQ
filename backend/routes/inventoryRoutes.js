@@ -1,6 +1,6 @@
-const express = require("express");
 
-const router = express.Router();
+const express = require("express");
+console.log("✅ INVENTORY ROUTES LOADED");
 
 const {
     createInventory,
@@ -9,12 +9,18 @@ const {
     updateStock
 } = require("../controllers/inventoryController");
 
-router.post("/", createInventory);
+const authMiddleware = require("../middleware/authMiddleware");
 
-router.get("/", getInventory);
+const router = express.Router();
 
-router.get("/product/:productId", getInventoryByProduct);
+console.log("✅ INVENTORY ROUTES LOADED");
 
-router.put("/:id", updateStock);
+router.get("/", authMiddleware, getInventory);
+
+router.post("/", authMiddleware, createInventory);
+
+router.get("/:productId", authMiddleware, getInventoryByProduct);
+
+router.put("/:id", authMiddleware, updateStock);
 
 module.exports = router;

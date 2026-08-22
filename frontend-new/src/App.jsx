@@ -1054,15 +1054,15 @@ setSales(getArray(data[8]));
         const token = localStorage.getItem("demandiq_token");
 
         const productData = {
-          product_id: productForm.product_id.trim(),
-          product_name: productForm.product_name.trim(),
-          category: productForm.category.trim(),
-          price: Number(productForm.price),
-          cost: Number(productForm.cost),
-          quantity: Number(productForm.quantity),
-          expiry_date: productForm.expiry_date || null,
-        };
-
+    product_name: productForm.product_name.trim(),
+    category: productForm.category.trim(),
+    price: Number(productForm.price),
+    cost: Number(productForm.cost),
+    quantity: Number(productForm.quantity),
+    store_id: productForm.store_id.trim(),
+    minimum_stock: Number(productForm.minimum_stock || 10),
+    expiry_date: productForm.expiry_date || null
+};
         if (!productData.product_id || !productData.product_name) {
           throw new Error("Product ID and Product Name are required");
         }
