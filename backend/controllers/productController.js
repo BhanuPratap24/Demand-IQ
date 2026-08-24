@@ -116,8 +116,11 @@ const getProduct = async (req, res) => {
 
     try {
 
+        const customer_id = req.user.customer_id;
+
         const product =
-            await Product.getProductById(
+            await Product.getCustomerProduct(
+                customer_id,
                 req.params.productId
             );
 

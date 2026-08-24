@@ -1,15 +1,13 @@
 const analyticsModel = require("../models/analyticsModel");
 
-
 // =====================================
 // DASHBOARD SUMMARY
 // =====================================
 
 const getSummary = async (req, res) => {
-
     try {
-
-        const data = await analyticsModel.getSummary();
+        const customer_id = req.user.customer_id;
+        const data = await analyticsModel.getSummary(customer_id);
 
         res.json({
             success: true,
@@ -17,7 +15,6 @@ const getSummary = async (req, res) => {
         });
 
     } catch (error) {
-
         console.error("Analytics Summary Error:", error);
 
         res.status(500).json({
@@ -34,10 +31,9 @@ const getSummary = async (req, res) => {
 // =====================================
 
 const getTopProducts = async (req, res) => {
-
     try {
-
-        const data = await analyticsModel.getTopProducts();
+        const customer_id = req.user.customer_id;
+        const data = await analyticsModel.getTopProducts(customer_id);
 
         res.json({
             success: true,
@@ -46,7 +42,6 @@ const getTopProducts = async (req, res) => {
         });
 
     } catch (error) {
-
         console.error("Top Products Error:", error);
 
         res.status(500).json({
@@ -63,10 +58,9 @@ const getTopProducts = async (req, res) => {
 // =====================================
 
 const getSalesTrend = async (req, res) => {
-
     try {
-
-        const data = await analyticsModel.getSalesTrend();
+        const customer_id = req.user.customer_id;
+        const data = await analyticsModel.getSalesTrend(customer_id);
 
         res.json({
             success: true,
@@ -75,7 +69,6 @@ const getSalesTrend = async (req, res) => {
         });
 
     } catch (error) {
-
         console.error("Sales Trend Error:", error);
 
         res.status(500).json({
@@ -92,10 +85,9 @@ const getSalesTrend = async (req, res) => {
 // =====================================
 
 const getLowStock = async (req, res) => {
-
     try {
-
-        const data = await analyticsModel.getLowStock();
+        const customer_id = req.user.customer_id;
+        const data = await analyticsModel.getLowStock(customer_id);
 
         res.json({
             success: true,
@@ -104,7 +96,6 @@ const getLowStock = async (req, res) => {
         });
 
     } catch (error) {
-
         console.error("Low Stock Error:", error);
 
         res.status(500).json({
@@ -121,10 +112,9 @@ const getLowStock = async (req, res) => {
 // =====================================
 
 const getStorePerformance = async (req, res) => {
-
     try {
-
-        const data = await analyticsModel.getStorePerformance();
+        const customer_id = req.user.customer_id;
+        const data = await analyticsModel.getStorePerformance(customer_id);
 
         res.json({
             success: true,
@@ -133,7 +123,6 @@ const getStorePerformance = async (req, res) => {
         });
 
     } catch (error) {
-
         console.error("Store Performance Error:", error);
 
         res.status(500).json({
@@ -151,4 +140,4 @@ module.exports = {
     getSalesTrend,
     getLowStock,
     getStorePerformance
-};
+};

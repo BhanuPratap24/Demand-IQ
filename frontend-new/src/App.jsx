@@ -28,6 +28,14 @@ function App() {
     !!(localStorage.getItem("demandiq_token") || localStorage.getItem("token"))
   );
 
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("demandiq_customer") || "{}");
+    } catch {
+      return {};
+    }
+  });
+
   const [authMode, setAuthMode] = useState("login");
 
   const [authForm, setAuthForm] = useState({
@@ -39,6 +47,13 @@ function App() {
     address: "",
   });
 
+  const [forgotForm, setForgotForm] = useState({
+    email: "",
+    new_password: "",
+    confirm_password: "",
+  });
+
+  const [forgotSuccess, setForgotSuccess] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -83,6 +98,7 @@ function App() {
     try {
       setAuthLoading(true);
       setAuthError("");
+      setForgotSuccess("");
 
       const endpoint =
         authMode === "login"
@@ -127,6 +143,7 @@ function App() {
           "demandiq_customer",
           JSON.stringify(data.customer)
         );
+        setUserProfile(data.customer);
       }
 
       setIsLoggedIn(true);
@@ -143,11 +160,66 @@ function App() {
     }
   };
 
+  // ==========================================
+  // FORGOT / RESET PASSWORD HANDLER
+  // ==========================================
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+
+    try {
+      setAuthLoading(true);
+      setAuthError("");
+      setForgotSuccess("");
+
+      if (!forgotForm.email || !forgotForm.new_password) {
+        throw new Error("Email and new password are required");
+      }
+
+      if (forgotForm.new_password.length < 6) {
+        throw new Error("Password must be at least 6 characters long");
+      }
+
+      if (forgotForm.new_password !== forgotForm.confirm_password) {
+        throw new Error("New password and confirm password do not match");
+      }
+
+      const response = await fetch(`${API}/auth/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: forgotForm.email.trim(),
+          new_password: forgotForm.new_password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Password reset failed");
+      }
+
+      setForgotSuccess(
+        data.message ||
+          "Password has been reset successfully! You can now log in."
+      );
+      setForgotForm({ email: "", new_password: "", confirm_password: "" });
+    } catch (err) {
+      console.error(err);
+      setAuthError(err.message || "Password reset failed");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("demandiq_token");
     localStorage.removeItem("demandiq_customer");
 
     setIsLoggedIn(false);
+    setUserProfile({});
     setPage("dashboard");
     setAuthMode("login");
 
@@ -159,7 +231,15 @@ function App() {
       city: "",
       address: "",
     });
+    setForgotForm({
+      email: "",
+      new_password: "",
+      confirm_password: "",
+    });
+    setForgotSuccess("");
+    setAuthError("");
   };
+
 
   // ==========================================
   // LOAD ALL DATA
@@ -189,6 +269,7 @@ function App() {
         "products",
         "inventory",
         "sales",
+        "auth/profile",
       ];
 
       const data = await Promise.all(
@@ -216,35 +297,41 @@ function App() {
       setStores(getArray(data[4]));
       setRecommendations(getArray(data[5]));
       const productList = getArray(data[6]);
-const inventoryList = getArray(data[7]);
+      const inventoryList = getArray(data[7]);
 
-const productsWithStock = productList.map((product) => {
-  const inventory = inventoryList.find(
-    (item) =>
-      String(item.product_id) ===
-      String(product.product_id)
-  );
+      const productsWithStock = productList.map((product) => {
+        const inventory = inventoryList.find(
+          (item) =>
+            String(item.product_id) ===
+            String(product.product_id)
+        );
 
-  return {
-    ...product,
-    quantity: inventory
-      ? Number(inventory.current_stock || 0)
-      : 0,
-  };
-});
+        return {
+          ...product,
+          quantity: inventory
+            ? Number(inventory.current_stock || 0)
+            : 0,
+        };
+      });
 
-setProducts(productsWithStock);
-setSales(getArray(data[8])); 
+      setProducts(productsWithStock);
+      setSales(getArray(data[8])); 
+
+      if (data[9]?.customer) {
+        setUserProfile(data[9].customer);
+        localStorage.setItem("demandiq_customer", JSON.stringify(data[9].customer));
+      }
     } catch (err) {
       console.error(err);
 
       setError(
-        "Backend connection nahi ho raha. Check karo Node server port 3000 par running hai."
+        "Backend connection error. Please make sure Node server is running on port 3000."
       );
     } finally {
       setLoading(false);
     }
   };
+
 
   // ==========================================
   // AUTH -> DASHBOARD
@@ -274,140 +361,270 @@ setSales(getArray(data[8]));
           <h1>DemandIQ</h1>
 
           <p className="auth-subtitle">
-            Demand Intelligence Platform
+            {authMode === "login"
+              ? "Demand Intelligence Platform"
+              : authMode === "signup"
+              ? "Create your business account"
+              : "Reset Account Password"}
           </p>
 
-          <form onSubmit={handleAuth}>
+          {authMode === "forgot" ? (
+            /* ========================================== */
+            /* FORGOT / RESET PASSWORD FORM              */
+            /* ========================================== */
+            <form onSubmit={handleForgotPassword}>
+              <p style={{ fontSize: "13px", color: "#9ca3af", textAlign: "center", marginBottom: "16px", lineHeight: "1.5" }}>
+                Enter your registered email and choose a new password.
+              </p>
 
-            {authMode === "signup" && (
-              <>
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  value={authForm.full_name}
-                  onChange={(e) =>
-                    setAuthForm({
-                      ...authForm,
-                      full_name: e.target.value,
-                    })
-                  }
-                  required
-                />
+              <input
+                type="email"
+                placeholder="Registered Email Address"
+                value={forgotForm.email}
+                onChange={(e) =>
+                  setForgotForm({
+                    ...forgotForm,
+                    email: e.target.value,
+                  })
+                }
+                required
+              />
 
-                <input
-                  type="text"
-                  placeholder="Phone"
-                  value={authForm.phone}
-                  onChange={(e) =>
-                    setAuthForm({
-                      ...authForm,
-                      phone: e.target.value,
-                    })
-                  }
-                  required
-                />
+              <input
+                type="password"
+                placeholder="New Password (min 6 characters)"
+                value={forgotForm.new_password}
+                onChange={(e) =>
+                  setForgotForm({
+                    ...forgotForm,
+                    new_password: e.target.value,
+                  })
+                }
+                required
+              />
 
-                <input
-                  type="text"
-                  placeholder="City"
-                  value={authForm.city}
-                  onChange={(e) =>
-                    setAuthForm({
-                      ...authForm,
-                      city: e.target.value,
-                    })
-                  }
-                  required
-                />
+              <input
+                type="password"
+                placeholder="Confirm New Password"
+                value={forgotForm.confirm_password}
+                onChange={(e) =>
+                  setForgotForm({
+                    ...forgotForm,
+                    confirm_password: e.target.value,
+                  })
+                }
+                required
+              />
 
-                <textarea
-                  placeholder="Address"
-                  value={authForm.address}
-                  onChange={(e) =>
-                    setAuthForm({
-                      ...authForm,
-                      address: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </>
-            )}
+              {forgotSuccess && (
+                <div style={{
+                  padding: "12px",
+                  borderRadius: "8px",
+                  background: "#dcfce7",
+                  color: "#166534",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  marginBottom: "14px",
+                  textAlign: "center"
+                }}>
+                  ✓ {forgotSuccess}
+                </div>
+              )}
 
-            <input
-              type="email"
-              placeholder="Email"
-              value={authForm.email}
-              onChange={(e) =>
-                setAuthForm({
-                  ...authForm,
-                  email: e.target.value,
-                })
-              }
-              required
-            />
+              {authError && (
+                <div className="auth-error">
+                  {authError}
+                </div>
+              )}
 
-            <input
-              type="password"
-              placeholder="Password"
-              value={authForm.password}
-              onChange={(e) =>
-                setAuthForm({
-                  ...authForm,
-                  password: e.target.value,
-                })
-              }
-              required
-            />
+              <button
+                type="submit"
+                disabled={authLoading}
+              >
+                {authLoading ? "Resetting Password..." : "Reset Password"}
+              </button>
 
-            {authError && (
-              <div className="auth-error">
-                {authError}
+              <div style={{ marginTop: "16px", textAlign: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthError("");
+                    setForgotSuccess("");
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#3b82f6",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: "600"
+                  }}
+                >
+                  ← Back to Login
+                </button>
               </div>
-            )}
+            </form>
+          ) : (
+            /* ========================================== */
+            /* LOGIN & SIGNUP FORM                       */
+            /* ========================================== */
+            <form onSubmit={handleAuth}>
 
-            <button
-              type="submit"
-              disabled={authLoading}
-            >
-              {authLoading
-                ? "Please wait..."
-                : authMode === "login"
-                ? "Login"
-                : "Create Account"}
-            </button>
+              {authMode === "signup" && (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Full Name"
+                    value={authForm.full_name}
+                    onChange={(e) =>
+                      setAuthForm({
+                        ...authForm,
+                        full_name: e.target.value,
+                      })
+                    }
+                    required
+                  />
 
-          </form>
+                  <input
+                    type="text"
+                    placeholder="Mobile Phone Number"
+                    value={authForm.phone}
+                    onChange={(e) =>
+                      setAuthForm({
+                        ...authForm,
+                        phone: e.target.value,
+                      })
+                    }
+                    required
+                  />
 
-          <div className="auth-switch">
+                  <input
+                    type="text"
+                    placeholder="City"
+                    value={authForm.city}
+                    onChange={(e) =>
+                      setAuthForm({
+                        ...authForm,
+                        city: e.target.value,
+                      })
+                    }
+                    required
+                  />
 
-            {authMode === "login"
-              ? "Don't have an account?"
-              : "Already have an account?"}
+                  <textarea
+                    placeholder="Business Address"
+                    value={authForm.address}
+                    onChange={(e) =>
+                      setAuthForm({
+                        ...authForm,
+                        address: e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </>
+              )}
 
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode(
-                  authMode === "login"
-                    ? "signup"
-                    : "login"
-                );
+              <input
+                type="email"
+                placeholder="Email Address"
+                value={authForm.email}
+                onChange={(e) =>
+                  setAuthForm({
+                    ...authForm,
+                    email: e.target.value,
+                  })
+                }
+                required
+              />
 
-                setAuthError("");
-              }}
-            >
+              <input
+                type="password"
+                placeholder="Password"
+                value={authForm.password}
+                onChange={(e) =>
+                  setAuthForm({
+                    ...authForm,
+                    password: e.target.value,
+                  })
+                }
+                required
+              />
+
+              {authMode === "login" && (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("forgot");
+                      setAuthError("");
+                      setForgotSuccess("");
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#60a5fa",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      padding: 0,
+                      fontWeight: "500"
+                    }}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
+
+              {authError && (
+                <div className="auth-error">
+                  {authError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+              >
+                {authLoading
+                  ? "Please wait..."
+                  : authMode === "login"
+                  ? "Login"
+                  : "Create Account"}
+              </button>
+
+            </form>
+          )}
+
+          {authMode !== "forgot" && (
+            <div className="auth-switch">
               {authMode === "login"
-                ? "Sign Up"
-                : "Login"}
-            </button>
+                ? "Don't have an account?"
+                : "Already have an account?"}
 
-          </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode(
+                    authMode === "login"
+                      ? "signup"
+                      : "login"
+                  );
+                  setAuthError("");
+                }}
+              >
+                {authMode === "login"
+                  ? "Sign Up"
+                  : "Login"}
+              </button>
+            </div>
+          )}
 
         </div>
       </div>
     );
   }
+
 
   // ==========================================
   // NAVIGATION
@@ -437,9 +654,15 @@ setSales(getArray(data[8]));
     {
       id: "recommendations",
       icon: "◈",
-      label: "Recommendations",
+      label: "AI Forecasts",
+    },
+    {
+      id: "profile",
+      icon: "👤",
+      label: "My Profile",
     },
   ];
+
 
   // ==========================================
   // LOADING
@@ -1007,10 +1230,13 @@ setSales(getArray(data[8]));
   );
 
   // ==========================================
-  // PRODUCTS PAGE
+  // PRODUCTS PAGE (WITH STOCK QUANTITY GRAPHS)
   // ==========================================
 
   const ProductsPage = () => {
+    const [viewMode, setViewMode] = useState("catalog"); // "catalog" | "graphs"
+    const [stockFilter, setStockFilter] = useState("all"); // "all" | "low" | "healthy" | "zero"
+    const [selectedCategory, setSelectedCategory] = useState("all");
     const [showForm, setShowForm] = useState(false);
 
     const [productForm, setProductForm] = useState({
@@ -1030,7 +1256,6 @@ setSales(getArray(data[8]));
 
     const handleProductChange = (e) => {
       const { name, value } = e.target;
-
       setProductForm((prev) => ({
         ...prev,
         [name]: value,
@@ -1070,39 +1295,23 @@ setSales(getArray(data[8]));
           throw new Error("Store ID is required");
         }
 
-        // =====================================
-        // STEP 1: CREATE PRODUCT
-        // =====================================
-
         const response = await fetch(`${API}/products`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify(productData),
         });
 
         const data = await response.json();
 
-        // =====================================
-        // STEP 2: PRODUCT ALREADY EXISTS
-        // =====================================
-
         if (response.status === 409) {
           const inventoryResponse = await fetch(`${API}/inventory`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              ...(token
-                ? {
-                    Authorization: `Bearer ${token}`,
-                  }
-                : {}),
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({
               product_id: productData.product_id,
@@ -1115,38 +1324,22 @@ setSales(getArray(data[8]));
           const inventoryData = await inventoryResponse.json();
 
           if (!inventoryResponse.ok) {
-            throw new Error(
-              inventoryData.message || "Failed to update inventory"
-            );
+            throw new Error(inventoryData.message || "Failed to update inventory");
           }
 
           setProductMessage(
-            `Existing product found. Added ${productData.quantity} units. Current stock: ${inventoryData.current_stock}`
+            `Existing product updated. Added ${productData.quantity} units. Total stock: ${inventoryData.current_stock}`
           );
         } else {
-          // =====================================
-          // STEP 3: NEW PRODUCT
-          // =====================================
-
           if (!response.ok) {
-            throw new Error(
-              data.message || "Failed to add product"
-            );
+            throw new Error(data.message || "Failed to add product");
           }
-
-          // =====================================
-          // STEP 4: CREATE INITIAL INVENTORY
-          // =====================================
 
           const inventoryResponse = await fetch(`${API}/inventory`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              ...(token
-                ? {
-                    Authorization: `Bearer ${token}`,
-                  }
-                : {}),
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({
               product_id: productData.product_id,
@@ -1159,20 +1352,11 @@ setSales(getArray(data[8]));
           const inventoryData = await inventoryResponse.json();
 
           if (!inventoryResponse.ok) {
-            throw new Error(
-              inventoryData.message ||
-                "Product created but inventory could not be added"
-            );
+            throw new Error(inventoryData.message || "Product created but inventory could not be added");
           }
 
-          setProductMessage(
-            `Product added successfully with ${inventoryData.current_stock} units in stock.`
-          );
+          setProductMessage(`Product added successfully with ${inventoryData.current_stock} units in stock.`);
         }
-
-        // =====================================
-        // RESET FORM
-        // =====================================
 
         setProductForm({
           product_id: "",
@@ -1186,30 +1370,40 @@ setSales(getArray(data[8]));
         });
 
         setShowForm(false);
-
-        // Refresh dashboard/product data
         await fetchData();
       } catch (err) {
         console.error("Add Product Error:", err);
-
-        setProductError(
-          err.message || "Failed to add product"
-        );
+        setProductError(err.message || "Failed to add product");
       } finally {
         setProductSaving(false);
       }
     };
 
+    // Filter products for graph/catalog
+    const categories = ["all", ...new Set(products.map((p) => p.category).filter(Boolean))];
+    const filteredProducts = products.filter((p) => {
+      const matchCat = selectedCategory === "all" || p.category === selectedCategory;
+      const qty = p.quantity || 0;
+      if (stockFilter === "low") return matchCat && qty > 0 && qty < 10;
+      if (stockFilter === "zero") return matchCat && qty === 0;
+      if (stockFilter === "healthy") return matchCat && qty >= 10;
+      return matchCat;
+    });
+
+    const maxStock = Math.max(...products.map((p) => p.quantity || 0), 20);
+    const totalInventoryValue = products.reduce(
+      (acc, p) => acc + (Number(p.price) || 0) * (Number(p.quantity) || 0),
+      0
+    );
+
     return (
       <Page
-        title="Products"
-        subtitle="Manage your product catalog"
+        title="Products & Inventory"
+        subtitle="Manage product catalog and visualize real-time inventory quantity levels"
       >
-
         {/* ============================= */}
-        {/* HEADER */}
+        {/* TOP BAR WITH VIEW TOGGLES    */}
         {/* ============================= */}
-
         <div
           style={{
             display: "flex",
@@ -1220,26 +1414,48 @@ setSales(getArray(data[8]));
             flexWrap: "wrap",
           }}
         >
-
-          <div>
-            <h2
+          {/* TAB BUTTONS */}
+          <div
+            style={{
+              display: "flex",
+              background: "#1e293b",
+              padding: "4px",
+              borderRadius: "10px",
+              gap: "4px",
+            }}
+          >
+            <button
+              onClick={() => setViewMode("catalog")}
               style={{
-                margin: 0,
-                fontSize: "22px",
+                padding: "8px 18px",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+                background: viewMode === "catalog" ? "#3b82f6" : "transparent",
+                color: viewMode === "catalog" ? "white" : "#94a3b8",
+                transition: "all 0.2s ease",
               }}
             >
-              Your Products
-            </h2>
-
-            <p
+              ▣ Product Catalog ({products.length})
+            </button>
+            <button
+              onClick={() => setViewMode("graphs")}
               style={{
-                marginTop: "6px",
-                opacity: 0.7,
+                padding: "8px 18px",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+                background: viewMode === "graphs" ? "#3b82f6" : "transparent",
+                color: viewMode === "graphs" ? "white" : "#94a3b8",
+                transition: "all 0.2s ease",
               }}
             >
-              Add and manage products used for
-              demand forecasting.
-            </p>
+              📊 Stock Quantity Graphs
+            </button>
           </div>
 
           <button
@@ -1249,7 +1465,7 @@ setSales(getArray(data[8]));
               setProductError("");
             }}
             style={{
-              padding: "12px 20px",
+              padding: "10px 18px",
               border: "none",
               borderRadius: "10px",
               cursor: "pointer",
@@ -1257,17 +1473,14 @@ setSales(getArray(data[8]));
               fontSize: "14px",
               background: "#2563eb",
               color: "white",
+              boxShadow: "0 4px 14px rgba(37, 99, 235, 0.3)",
             }}
           >
             {showForm ? "✕ Close" : "+ Add Product"}
           </button>
-
         </div>
 
-        {/* ============================= */}
-        {/* SUCCESS MESSAGE */}
-        {/* ============================= */}
-
+        {/* MESSAGES */}
         {productMessage && (
           <div
             style={{
@@ -1282,10 +1495,6 @@ setSales(getArray(data[8]));
             ✓ {productMessage}
           </div>
         )}
-
-        {/* ============================= */}
-        {/* ERROR MESSAGE */}
-        {/* ============================= */}
 
         {productError && (
           <div
@@ -1302,10 +1511,7 @@ setSales(getArray(data[8]));
           </div>
         )}
 
-        {/* ============================= */}
         {/* ADD PRODUCT FORM */}
-        {/* ============================= */}
-
         {showForm && (
           <form
             onSubmit={handleAddProduct}
@@ -1314,30 +1520,17 @@ setSales(getArray(data[8]));
               marginBottom: "30px",
               borderRadius: "16px",
               background: "#ffffff",
-              boxShadow:
-                "0 8px 30px rgba(0,0,0,0.08)",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
             }}
           >
-
-            <h3
-              style={{
-                marginTop: 0,
-                marginBottom: "20px",
-              }}
-            >
-              Add New Product
-            </h3>
-
+            <h3 style={{ marginTop: 0, marginBottom: "20px" }}>Add New Product</h3>
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(220px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
                 gap: "18px",
               }}
             >
-
-              {/* Product ID */}
               <div>
                 <label>Product ID</label>
                 <input
@@ -1350,7 +1543,6 @@ setSales(getArray(data[8]));
                 />
               </div>
 
-              {/* Product Name */}
               <div>
                 <label>Product Name</label>
                 <input
@@ -1363,7 +1555,6 @@ setSales(getArray(data[8]));
                 />
               </div>
 
-              {/* Category */}
               <div>
                 <label>Category</label>
                 <input
@@ -1375,7 +1566,6 @@ setSales(getArray(data[8]));
                 />
               </div>
 
-              {/* Price */}
               <div>
                 <label>Selling Price</label>
                 <input
@@ -1391,7 +1581,6 @@ setSales(getArray(data[8]));
                 />
               </div>
 
-              {/* Cost */}
               <div>
                 <label>Product Cost</label>
                 <input
@@ -1407,7 +1596,6 @@ setSales(getArray(data[8]));
                 />
               </div>
 
-              {/* Store ID */}
               <div>
                 <label>Store ID</label>
                 <input
@@ -1420,7 +1608,6 @@ setSales(getArray(data[8]));
                 />
               </div>
 
-              {/* Quantity */}
               <div>
                 <label>Quantity</label>
                 <input
@@ -1436,7 +1623,6 @@ setSales(getArray(data[8]));
                 />
               </div>
 
-              {/* Expiry */}
               <div>
                 <label>Expiry Date</label>
                 <input
@@ -1447,7 +1633,6 @@ setSales(getArray(data[8]));
                   style={productInputStyle}
                 />
               </div>
-
             </div>
 
             <button
@@ -1458,214 +1643,708 @@ setSales(getArray(data[8]));
                 padding: "12px 24px",
                 border: "none",
                 borderRadius: "10px",
-                cursor: productSaving
-                  ? "not-allowed"
-                  : "pointer",
+                cursor: productSaving ? "not-allowed" : "pointer",
                 fontWeight: "600",
                 background: "#16a34a",
                 color: "white",
               }}
             >
-              {productSaving
-                ? "Saving..."
-                : "✓ Save Product"}
+              {productSaving ? "Saving..." : "✓ Save Product"}
             </button>
-
           </form>
         )}
 
-        {/* ============================= */}
-        {/* PRODUCT LIST */}
-        {/* ============================= */}
-
-        <div style={pageStyles.grid}>
-
-          {products.length === 0 ? (
-            <div style={pageStyles.empty}>
-              No products found in database.
-            </div>
-          ) : (
-            products.map(
-              (product, index) => (
-                <div
-                  key={index}
-                  style={pageStyles.card}
-                >
-                  <div
-                    style={pageStyles.cardTop}
-                  >
-                    <div
-                      style={pageStyles.productIcon}
-                    >
-                      {product.product_name
-                        ?.charAt(0)
-                        ?.toUpperCase() || "P"}
-                    </div>
-
-                    <span
-                      style={pageStyles.badge}
-                    >
-                      {product.product_id}
-                    </span>
-                  </div>
-
-                  <h3>
-                    {product.product_name ||
-                      product.name ||
-                      "Unnamed Product"}
-                  </h3>
-
-                  <p>
-                    {product.category ||
-                      "General"}
-                  </p>
-
-                  <div
-                    style={pageStyles.row}
-                  >
-                    <span>Price</span>
-                    <strong>
-                      {money(product.price)}
-                    </strong>
-                  </div>
-
-                  <div
-                    style={pageStyles.row}
-                  >
-                    <span>Cost</span>
-                    
-                    <strong>
-                      {money(product.cost)}
-                    </strong>
-                  </div>
-                  <div
-                     style={{...pageStyles.row,
-                        marginTop: "8px",}}
->
-  <span>Quantity</span>
-
-  <strong>
-    {product.quantity ?? 0} units
-  </strong>
-</div>
+        {/* ================================================== */}
+        {/* VIEW 1: STOCK QUANTITY GRAPHS & VISUAL DISTRIBUTION */}
+        {/* ================================================== */}
+        {viewMode === "graphs" ? (
+          <div>
+            {/* KPI STATS */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  padding: "18px",
+                  borderRadius: "14px",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
+                }}
+              >
+                <small style={{ color: "#64748b", fontWeight: "600" }}>Total Products</small>
+                <div style={{ fontSize: "24px", fontWeight: "800", marginTop: "4px", color: "#1e293b" }}>
+                  {products.length}
                 </div>
-              )
-            )
-          )}
+              </div>
 
-        </div>
+              <div
+                style={{
+                  background: "white",
+                  padding: "18px",
+                  borderRadius: "14px",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
+                }}
+              >
+                <small style={{ color: "#64748b", fontWeight: "600" }}>Total Stock Units</small>
+                <div style={{ fontSize: "24px", fontWeight: "800", marginTop: "4px", color: "#2563eb" }}>
+                  {products.reduce((acc, p) => acc + (p.quantity || 0), 0)} units
+                </div>
+              </div>
 
+              <div
+                style={{
+                  background: "white",
+                  padding: "18px",
+                  borderRadius: "14px",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
+                }}
+              >
+                <small style={{ color: "#64748b", fontWeight: "600" }}>Total Stock Value</small>
+                <div style={{ fontSize: "24px", fontWeight: "800", marginTop: "4px", color: "#059669" }}>
+                  {money(totalInventoryValue)}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "white",
+                  padding: "18px",
+                  borderRadius: "14px",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
+                }}
+              >
+                <small style={{ color: "#64748b", fontWeight: "600" }}>Low Stock Alert (&lt; 10)</small>
+                <div
+                  style={{
+                    fontSize: "24px",
+                    fontWeight: "800",
+                    marginTop: "4px",
+                    color: products.some((p) => (p.quantity || 0) < 10) ? "#ef4444" : "#10b981",
+                  }}
+                >
+                  {products.filter((p) => (p.quantity || 0) < 10).length} items
+                </div>
+              </div>
+            </div>
+
+            {/* FILTERS */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: "white",
+                padding: "16px 20px",
+                borderRadius: "14px",
+                marginBottom: "20px",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+                gap: "14px",
+                flexWrap: "wrap",
+              }}
+            >
+              {/* Category Filter */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "13px", fontWeight: "600", color: "#64748b" }}>Category:</span>
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "20px",
+                      border: "none",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      background: selectedCategory === cat ? "#3b82f6" : "#f1f5f9",
+                      color: selectedCategory === cat ? "white" : "#475569",
+                    }}
+                  >
+                    {cat === "all" ? "All Categories" : cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Stock Health Filter */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "600", color: "#64748b" }}>Filter:</span>
+                <select
+                  value={stockFilter}
+                  onChange={(e) => setStockFilter(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    outline: "none",
+                  }}
+                >
+                  <option value="all">All Products ({products.length})</option>
+                  <option value="healthy">Healthy Stock (&gt;= 10)</option>
+                  <option value="low">Low Stock (&lt; 10)</option>
+                  <option value="zero">Out of Stock (0)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* VISUAL STOCK QUANTITY BAR CHARTS */}
+            <div
+              style={{
+                background: "white",
+                padding: "24px",
+                borderRadius: "16px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
+                <h3 style={{ margin: 0, fontSize: "18px", color: "#0f172a" }}>
+                  📊 Product Quantity Levels & Safety Thresholds
+                </h3>
+                <div style={{ display: "flex", gap: "12px", fontSize: "12px", alignItems: "center" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#10b981" }}></span>
+                    Healthy (&gt;=10)
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#f59e0b" }}></span>
+                    Low Stock (&lt;10)
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#ef4444" }}></span>
+                    Out of Stock (0)
+                  </span>
+                </div>
+              </div>
+
+              {filteredProducts.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                  No products match the selected filters.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {filteredProducts.map((p) => {
+                    const qty = Number(p.quantity || 0);
+                    const percentage = Math.min(Math.round((qty / maxStock) * 100), 100);
+                    const isLow = qty > 0 && qty < 10;
+                    const isOut = qty === 0;
+                    const barColor = isOut ? "#ef4444" : isLow ? "#f59e0b" : "#10b981";
+
+                    return (
+                      <div
+                        key={p.product_id}
+                        style={{
+                          padding: "14px 16px",
+                          borderRadius: "12px",
+                          background: "#f8fafc",
+                          border: `1px solid ${isOut ? "#fee2e2" : isLow ? "#fef3c7" : "#e2e8f0"}`,
+                          transition: "transform 0.15s ease",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <span
+                              style={{
+                                background: "#0f172a",
+                                color: "white",
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "11px",
+                                fontWeight: "700",
+                              }}
+                            >
+                              {p.product_id}
+                            </span>
+                            <strong style={{ fontSize: "14px", color: "#1e293b" }}>
+                              {p.product_name}
+                            </strong>
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                color: "#64748b",
+                                background: "#e2e8f0",
+                                padding: "2px 8px",
+                                borderRadius: "10px",
+                              }}
+                            >
+                              {p.category || "General"}
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                            <span style={{ fontSize: "13px", color: "#64748b" }}>
+                              Value: <strong>{money((p.price || 0) * qty)}</strong>
+                            </span>
+                            <span
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: "20px",
+                                fontSize: "12px",
+                                fontWeight: "700",
+                                background: isOut ? "#fee2e2" : isLow ? "#fef3c7" : "#dcfce7",
+                                color: isOut ? "#dc2626" : isLow ? "#d97706" : "#16a34a",
+                              }}
+                            >
+                              {qty} units in stock
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* GRAPH PROGRESS BAR */}
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "12px",
+                            background: "#e2e8f0",
+                            borderRadius: "6px",
+                            overflow: "hidden",
+                            position: "relative",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.max(percentage, 2)}%`,
+                              height: "100%",
+                              background: barColor,
+                              borderRadius: "6px",
+                              transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                            }}
+                          ></div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "11px",
+                            color: "#94a3b8",
+                            marginTop: "4px",
+                          }}
+                        >
+                          <span>Min Threshold: 10 units</span>
+                          <span>{percentage}% of maximum capacity</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* ================================================== */
+          /* VIEW 2: PRODUCT CATALOG CARDS                      */
+          /* ================================================== */
+          <div style={pageStyles.grid}>
+            {products.length === 0 ? (
+              <div style={pageStyles.empty}>No products found in database.</div>
+            ) : (
+              products.map((product, index) => (
+                <div key={index} style={pageStyles.card}>
+                  <div style={pageStyles.cardTop}>
+                    <div style={pageStyles.productIcon}>
+                      {product.product_name?.charAt(0)?.toUpperCase() || "P"}
+                    </div>
+                    <span style={pageStyles.badge}>{product.product_id}</span>
+                  </div>
+
+                  <h3>{product.product_name || product.name || "Unnamed Product"}</h3>
+                  <p>{product.category || "General"}</p>
+
+                  <div style={pageStyles.row}>
+                    <span>Price</span>
+                    <strong>{money(product.price)}</strong>
+                  </div>
+
+                  <div style={pageStyles.row}>
+                    <span>Cost</span>
+                    <strong>{money(product.cost)}</strong>
+                  </div>
+
+                  <div style={{ ...pageStyles.row, marginTop: "8px" }}>
+                    <span>Quantity</span>
+                    <strong
+                      style={{
+                        color:
+                          (product.quantity || 0) === 0
+                            ? "#ef4444"
+                            : (product.quantity || 0) < 10
+                            ? "#f59e0b"
+                            : "#10b981",
+                      }}
+                    >
+                      {product.quantity ?? 0} units
+                    </strong>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </Page>
     );
   };
 
+
   // ==========================================
-  // SALES PAGE
+  // SALES PAGE (WITH RECORD SALE FORM)
   // ==========================================
 
-  const SalesPage = () => (
-    <Page
-      title="Sales"
-      subtitle="View real sales transactions"
-    >
+  const SalesPage = () => {
+    const [showSaleForm, setShowSaleForm] = useState(false);
+    const [saleForm, setSaleForm] = useState({
+      product_id: "",
+      store_id: "Store-1",
+      sale_date: new Date().toISOString().split("T")[0],
+      units_sold: "",
+      selling_price: ""
+    });
+    const [saleMessage, setSaleMessage] = useState("");
+    const [saleError, setSaleError] = useState("");
+    const [saleSaving, setSaleSaving] = useState(false);
 
-      <div
-        style={pageStyles.tableWrapper}
+    const handleSaleChange = (e) => {
+      const { name, value } = e.target;
+      setSaleForm((prev) => {
+        const updated = { ...prev, [name]: value };
+        if (name === "product_id") {
+          const selectedProd = products.find(p => p.product_id === value);
+          if (selectedProd && !prev.selling_price) {
+            updated.selling_price = selectedProd.price || "";
+          }
+        }
+        return updated;
+      });
+    };
+
+    const handleRecordSale = async (e) => {
+      e.preventDefault();
+      try {
+        setSaleSaving(true);
+        setSaleMessage("");
+        setSaleError("");
+
+        const token = localStorage.getItem("demandiq_token");
+
+        if (!saleForm.product_id) {
+          throw new Error("Please select a product");
+        }
+
+        const salePayload = {
+          product_id: saleForm.product_id.trim(),
+          store_id: saleForm.store_id.trim() || "Store-1",
+          sale_date: saleForm.sale_date,
+          units_sold: Number(saleForm.units_sold),
+          selling_price: saleForm.selling_price ? Number(saleForm.selling_price) : undefined
+        };
+
+        const res = await fetch(`${API}/sales`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(salePayload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to record sale");
+        }
+
+        setSaleMessage(`Sale recorded successfully! Revenue: ₹${data.revenue || 0}, Profit: ₹${data.profit || 0}`);
+        setSaleForm({
+          product_id: "",
+          store_id: "Store-1",
+          sale_date: new Date().toISOString().split("T")[0],
+          units_sold: "",
+          selling_price: ""
+        });
+        setShowSaleForm(false);
+        fetchData();
+      } catch (err) {
+        setSaleError(err.message);
+      } finally {
+        setSaleSaving(false);
+      }
+    };
+
+    return (
+      <Page
+        title="Sales Transactions"
+        subtitle="Record and monitor real-time sales transactions"
       >
-
-        {sales.length === 0 ? (
-
-          <div style={pageStyles.empty}>
-            No sales records found.
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "24px",
+            gap: "16px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0, fontSize: "22px" }}>Sales History</h2>
+            <p style={{ marginTop: "6px", opacity: 0.7 }}>
+              Transactions update store inventory and AI demand metrics in real-time.
+            </p>
           </div>
 
-        ) : (
-
-          <table
-            style={pageStyles.table}
+          <button
+            onClick={() => {
+              setShowSaleForm(!showSaleForm);
+              setSaleMessage("");
+              setSaleError("");
+            }}
+            style={{
+              padding: "12px 20px",
+              border: "none",
+              borderRadius: "10px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+              background: "#059669",
+              color: "white",
+            }}
           >
+            {showSaleForm ? "✕ Close" : "+ Record Sale"}
+          </button>
+        </div>
 
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Product</th>
-                <th>Store</th>
-                <th>Date</th>
-                <th>Units</th>
-                <th>Sale Price</th>
-                <th>Revenue</th>
-                <th>Profit</th>
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {sales.map(
-                (sale, index) => (
-
-                  <tr key={index}>
-
-                    <td>
-                      {sale.id}
-                    </td>
-
-                    <td>
-                      <strong>
-                        {sale.product_id}
-                      </strong>
-                    </td>
-
-                    <td>
-                      {sale.store_id || "-"}
-                    </td>
-
-                    <td>
-                      {sale.sale_date
-                        ? new Date(
-                            sale.sale_date
-                          ).toLocaleDateString(
-                            "en-IN"
-                          )
-                        : "-"}
-                    </td>
-
-                    <td>
-                      {sale.units_sold || 0}
-                    </td>
-
-                    <td>
-                      {money(
-                        sale.selling_price
-                      )}
-                    </td>
-
-                    <td>
-                      {money(
-                        sale.revenue
-                      )}
-                    </td>
-
-                    <td>
-                      {money(
-                        sale.profit
-                      )}
-                    </td>
-
-                  </tr>
-
-                )
-              )}
-
-            </tbody>
-
-          </table>
-
+        {saleMessage && (
+          <div
+            style={{
+              padding: "14px 18px",
+              marginBottom: "20px",
+              borderRadius: "10px",
+              background: "#dcfce7",
+              color: "#166534",
+              fontWeight: "600",
+            }}
+          >
+            ✓ {saleMessage}
+          </div>
         )}
 
-      </div>
+        {saleError && (
+          <div
+            style={{
+              padding: "14px 18px",
+              marginBottom: "20px",
+              borderRadius: "10px",
+              background: "#fee2e2",
+              color: "#991b1b",
+              fontWeight: "600",
+            }}
+          >
+            ⚠ {saleError}
+          </div>
+        )}
 
-    </Page>
-  );
+        {showSaleForm && (
+          <form
+            onSubmit={handleRecordSale}
+            style={{
+              padding: "24px",
+              marginBottom: "30px",
+              borderRadius: "16px",
+              background: "#ffffff",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "20px" }}>Record New Sale</h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "18px",
+              }}
+            >
+              <div>
+                <label>Select Product</label>
+                <select
+                  name="product_id"
+                  value={saleForm.product_id}
+                  onChange={handleSaleChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    marginTop: "6px"
+                  }}
+                >
+                  <option value="">-- Choose Product --</option>
+                  {products.map(p => (
+                    <option key={p.product_id} value={p.product_id}>
+                      {p.product_name} ({p.product_id}) - Available: {p.quantity || 0}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label>Store ID</label>
+                <input
+                  name="store_id"
+                  value={saleForm.store_id}
+                  onChange={handleSaleChange}
+                  placeholder="Store ID (e.g. S001)"
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    marginTop: "6px"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label>Units Sold</label>
+                <input
+                  type="number"
+                  min="1"
+                  name="units_sold"
+                  value={saleForm.units_sold}
+                  onChange={handleSaleChange}
+                  placeholder="Units Sold (e.g. 5)"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    marginTop: "6px"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label>Selling Price (per unit)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="selling_price"
+                  value={saleForm.selling_price}
+                  onChange={handleSaleChange}
+                  placeholder="Price (e.g. 40)"
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    marginTop: "6px"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label>Sale Date</label>
+                <input
+                  type="date"
+                  name="sale_date"
+                  value={saleForm.sale_date}
+                  onChange={handleSaleChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    marginTop: "6px"
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginTop: "20px" }}>
+              <button
+                type="submit"
+                disabled={saleSaving}
+                style={{
+                  padding: "12px 24px",
+                  background: "#059669",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                {saleSaving ? "Recording..." : "Save Sale Transaction"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div style={pageStyles.tableWrapper}>
+          {sales.length === 0 ? (
+            <div style={pageStyles.empty}>
+              No sales records found. Click "+ Record Sale" to add your first transaction.
+            </div>
+          ) : (
+            <table style={pageStyles.table}>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Product</th>
+                  <th>Store</th>
+                  <th>Date</th>
+                  <th>Units Sold</th>
+                  <th>Sale Price</th>
+                  <th>Revenue</th>
+                  <th>Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sales.map((sale, index) => (
+                  <tr key={index}>
+                    <td>#{sale.id}</td>
+                    <td>
+                      <strong>{sale.product_name || sale.product_id}</strong>
+                      <small style={{ display: "block", color: "#6b7280" }}>{sale.product_id}</small>
+                    </td>
+                    <td>{sale.store_id || "Main"}</td>
+                    <td>
+                      {sale.sale_date
+                        ? new Date(sale.sale_date).toLocaleDateString("en-IN")
+                        : "-"}
+                    </td>
+                    <td>
+                      <strong>{sale.units_sold || 0}</strong>
+                    </td>
+                    <td>{money(sale.selling_price)}</td>
+                    <td style={{ color: "#059669", fontWeight: "600" }}>{money(sale.revenue)}</td>
+                    <td style={{ color: "#2563eb", fontWeight: "600" }}>{money(sale.profit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Page>
+    );
+  };
 
   // ==========================================
   // STORES PAGE
@@ -1676,152 +2355,533 @@ setSales(getArray(data[8]));
       title="Stores"
       subtitle="Store-wise business performance"
     >
-
       <div style={pageStyles.grid}>
-
         {stores.length === 0 ? (
-
           <div style={pageStyles.empty}>
             No store data available.
           </div>
-
         ) : (
-
-          stores.map(
-            (store, index) => (
-
-              <div
-                key={index}
-                style={pageStyles.card}
-              >
-
-                <div
-                  style={pageStyles.storeNumber}
-                >
-                  #{index + 1}
-                </div>
-
-                <h3>
-                  Store {store.store_id}
-                </h3>
-
-                <p>
-                  Performance overview
-                </p>
-
-                <div
-                  style={pageStyles.row}
-                >
-
-                  <span>
-                    Units Sold
-                  </span>
-
-                  <strong>
-                    {store.units_sold || 0}
-                  </strong>
-
-                </div>
-
-                <div
-                  style={pageStyles.row}
-                >
-
-                  <span>
-                    Revenue
-                  </span>
-
-                  <strong>
-                    {money(
-                      store.revenue
-                    )}
-                  </strong>
-
-                </div>
-
+          stores.map((store, index) => (
+            <div key={index} style={pageStyles.card}>
+              <div style={pageStyles.storeNumber}>#{index + 1}</div>
+              <h3>Store {store.store_id}</h3>
+              <p>Performance overview</p>
+              <div style={pageStyles.row}>
+                <span>Units Sold</span>
+                <strong>{store.units_sold || 0}</strong>
               </div>
-            )
-          )
+              <div style={pageStyles.row}>
+                <span>Revenue</span>
+                <strong>{money(store.revenue)}</strong>
+              </div>
+            </div>
+          ))
         )}
-
       </div>
-
     </Page>
   );
 
   // ==========================================
-  // RECOMMENDATIONS PAGE
+  // RECOMMENDATIONS PAGE (AI & ML ENHANCED)
   // ==========================================
 
   const RecommendationsPage = () => (
     <Page
-      title="AI Recommendations"
-      subtitle="Demand-driven business intelligence"
+      title="AI Demand Forecasting & Recommendations"
+      subtitle="Machine learning driven inventory insights and replenishment actions"
     >
-
       {recommendations.length === 0 ? (
-
         <div style={pageStyles.empty}>
-          No recommendations available
-          yet.
+          No products or recommendations available. Add products to generate AI forecasts.
         </div>
-
       ) : (
-
-        <div
-          style={
-            pageStyles.recommendationGrid
-          }
-        >
-
-          {recommendations.map(
-            (item, index) => (
-
+        <div style={pageStyles.recommendationGrid}>
+          {recommendations.map((item, index) => {
+            const isReorder = item.action !== "NO REORDER" && item.ml_recommendation !== "KEEP CURRENT STOCK";
+            return (
               <div
                 key={index}
-                style={pageStyles.aiCard}
+                style={{
+                  ...pageStyles.aiCard,
+                  borderLeft: isReorder ? "4px solid #ef4444" : "4px solid #10b981",
+                  background: "#ffffff",
+                  padding: "20px",
+                  borderRadius: "12px",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px"
+                }}
               >
-
-                <div
-                  style={pageStyles.aiNumber}
-                >
-                  {index + 1}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={pageStyles.badge}>{item.product_id}</span>
+                  <span
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "20px",
+                      fontSize: "12px",
+                      fontWeight: "700",
+                      background: isReorder ? "#fee2e2" : "#dcfce7",
+                      color: isReorder ? "#dc2626" : "#16a34a"
+                    }}
+                  >
+                    {item.ml_recommendation || item.action || "NO REORDER"}
+                  </span>
                 </div>
 
-                <div>
+                <h3 style={{ margin: 0, fontSize: "18px" }}>
+                  {item.product_name || item.product_id}
+                </h3>
+                <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>
+                  Category: {item.category || "General"} | Store: {item.store_id || "Main"}
+                </p>
 
-                  <h3>
-                    {item.product_name ||
-                      item.product_id ||
-                      "Product"}
-                  </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "6px" }}>
+                  <div style={{ background: "#f8fafc", padding: "10px", borderRadius: "8px" }}>
+                    <small style={{ color: "#64748b" }}>Current Stock</small>
+                    <div style={{ fontSize: "18px", fontWeight: "700" }}>{item.current_stock ?? 0} units</div>
+                  </div>
+                  <div style={{ background: "#eff6ff", padding: "10px", borderRadius: "8px" }}>
+                    <small style={{ color: "#2563eb" }}>🔮 Predicted Demand (7D)</small>
+                    <div style={{ fontSize: "18px", fontWeight: "700", color: "#1d4ed8" }}>
+                      {item.ml_predicted_demand ?? item.predicted_7_day_demand ?? 0} units
+                    </div>
+                  </div>
+                </div>
 
-                  <p>
-                    {item.message ||
-                      item.recommendation ||
-                      "Demand signal detected."}
-                  </p>
-
-                  {item.product_id && (
-                    <span
-                      style={pageStyles.badge}
-                    >
-                      {item.product_id}
+                {(item.ml_reorder_quantity > 0 || item.reorder_quantity > 0) && (
+                  <div style={{ background: "#fff7ed", border: "1px solid #ffedd5", padding: "10px", borderRadius: "8px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#c2410c" }}>
+                      ⚡ Suggested Reorder: {item.ml_reorder_quantity || item.reorder_quantity} units
                     </span>
-                  )}
+                  </div>
+                )}
 
+                <div style={{ fontSize: "13px", color: "#4b5563", background: "#f9fafb", padding: "10px", borderRadius: "8px" }}>
+                  <strong>Insight: </strong>{item.ml_reason || item.reason || "Inventory is optimal."}
                 </div>
 
+                {item.is_ml_available && (
+                  <div style={{ fontSize: "11px", color: "#059669", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span>●</span> Powered by XGBoost / Random Forest Demand Model
+                  </div>
+                )}
               </div>
-            )
-          )}
-
+            );
+          })}
         </div>
-
       )}
-
     </Page>
   );
+
+
+  // ==========================================
+  // PROFILE PAGE (USER INFO & EDIT FORM)
+  // ==========================================
+
+  const ProfilePage = () => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState({
+      full_name: userProfile.full_name || "",
+      phone: userProfile.phone || "",
+      city: userProfile.city || "",
+      address: userProfile.address || ""
+    });
+    const [profileSaving, setProfileSaving] = useState(false);
+    const [profileSuccess, setProfileSuccess] = useState("");
+    const [profileError, setProfileError] = useState("");
+
+    const handleEditChange = (e) => {
+      const { name, value } = e.target;
+      setEditForm(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSaveProfile = async (e) => {
+      e.preventDefault();
+      try {
+        setProfileSaving(true);
+        setProfileSuccess("");
+        setProfileError("");
+
+        const token = localStorage.getItem("demandiq_token");
+
+        const res = await fetch(`${API}/auth/profile`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(editForm)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to update profile");
+        }
+
+        if (data.customer) {
+          setUserProfile(data.customer);
+          localStorage.setItem("demandiq_customer", JSON.stringify(data.customer));
+        }
+
+        setProfileSuccess("Profile updated successfully!");
+        setIsEditing(false);
+      } catch (err) {
+        setProfileError(err.message);
+      } finally {
+        setProfileSaving(false);
+      }
+    };
+
+    return (
+      <Page
+        title="Account Profile"
+        subtitle="Manage your business credentials, contact information, and store details"
+      >
+        {profileSuccess && (
+          <div
+            style={{
+              padding: "14px 18px",
+              marginBottom: "20px",
+              borderRadius: "10px",
+              background: "#dcfce7",
+              color: "#166534",
+              fontWeight: "600",
+            }}
+          >
+            ✓ {profileSuccess}
+          </div>
+        )}
+
+        {profileError && (
+          <div
+            style={{
+              padding: "14px 18px",
+              marginBottom: "20px",
+              borderRadius: "10px",
+              background: "#fee2e2",
+              color: "#991b1b",
+              fontWeight: "600",
+            }}
+          >
+            ⚠ {profileError}
+          </div>
+        )}
+
+        {/* HERO USER PROFILE CARD */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)",
+            color: "white",
+            padding: "30px",
+            borderRadius: "16px",
+            marginBottom: "24px",
+            boxShadow: "0 10px 25px rgba(30, 58, 138, 0.2)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "20px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <div
+              style={{
+                width: "72px",
+                height: "72px",
+                borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                border: "2px solid rgba(255, 255, 255, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "28px",
+                fontWeight: "700"
+              }}
+            >
+              {userProfile.full_name?.charAt(0)?.toUpperCase() || "U"}
+            </div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: "24px", fontWeight: "700" }}>
+                {userProfile.full_name || "DemandIQ User"}
+              </h2>
+              <p style={{ margin: "4px 0 0 0", opacity: 0.9, fontSize: "14px" }}>
+                {userProfile.email}
+              </p>
+              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                <span
+                  style={{
+                    background: "rgba(255, 255, 255, 0.2)",
+                    padding: "4px 10px",
+                    borderRadius: "20px",
+                    fontSize: "12px",
+                    fontWeight: "600"
+                  }}
+                >
+                  Account ID: #{userProfile.customer_id || "1"}
+                </span>
+                <span
+                  style={{
+                    background: "#10b981",
+                    padding: "4px 10px",
+                    borderRadius: "20px",
+                    fontSize: "12px",
+                    fontWeight: "600"
+                  }}
+                >
+                  ● Verified Active
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              setIsEditing(!isEditing);
+              setProfileSuccess("");
+              setProfileError("");
+              setEditForm({
+                full_name: userProfile.full_name || "",
+                phone: userProfile.phone || "",
+                city: userProfile.city || "",
+                address: userProfile.address || ""
+              });
+            }}
+            style={{
+              padding: "12px 20px",
+              background: "white",
+              color: "#1e3a8a",
+              border: "none",
+              borderRadius: "10px",
+              fontWeight: "600",
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+            }}
+          >
+            {isEditing ? "✕ Cancel Edit" : "✎ Edit Profile"}
+          </button>
+        </div>
+
+        {/* EDIT PROFILE FORM */}
+        {isEditing && (
+          <form
+            onSubmit={handleSaveProfile}
+            style={{
+              background: "white",
+              padding: "24px",
+              borderRadius: "16px",
+              marginBottom: "24px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.06)"
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "20px" }}>Update Contact & Location Details</h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "18px"
+              }}
+            >
+              <div>
+                <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>Full Name</label>
+                <input
+                  name="full_name"
+                  value={editForm.full_name}
+                  onChange={handleEditChange}
+                  required
+                  style={productInputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>Mobile Phone Number</label>
+                <input
+                  name="phone"
+                  value={editForm.phone}
+                  onChange={handleEditChange}
+                  placeholder="+91 9876543210"
+                  style={productInputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>City</label>
+                <input
+                  name="city"
+                  value={editForm.city}
+                  onChange={handleEditChange}
+                  placeholder="e.g. Mumbai, Delhi, Bengaluru"
+                  style={productInputStyle}
+                />
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>Address</label>
+                <textarea
+                  name="address"
+                  value={editForm.address}
+                  onChange={handleEditChange}
+                  placeholder="Street, Building, Landmark, Pincode"
+                  rows="3"
+                  style={{
+                    ...productInputStyle,
+                    fontFamily: "inherit"
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginTop: "20px", display: "flex", gap: "10px" }}>
+              <button
+                type="submit"
+                disabled={profileSaving}
+                style={{
+                  padding: "12px 24px",
+                  background: "#2563eb",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                {profileSaving ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                style={{
+                  padding: "12px 20px",
+                  background: "#f3f4f6",
+                  color: "#374151",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* DETAILS GRID */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "20px"
+          }}
+        >
+          {/* PERSONAL & CONTACT INFORMATION */}
+          <div
+            style={{
+              background: "white",
+              padding: "24px",
+              borderRadius: "16px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.06)"
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "18px", fontSize: "18px" }}>
+              👤 User Information
+            </h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={pageStyles.row}>
+                <span style={{ color: "#6b7280" }}>Full Name</span>
+                <strong>{userProfile.full_name || "N/A"}</strong>
+              </div>
+
+              <div style={pageStyles.row}>
+                <span style={{ color: "#6b7280" }}>Email Address</span>
+                <strong>{userProfile.email || "N/A"}</strong>
+              </div>
+
+              <div style={pageStyles.row}>
+                <span style={{ color: "#6b7280" }}>Mobile Number</span>
+                <strong style={{ color: userProfile.phone ? "#111827" : "#9ca3af" }}>
+                  {userProfile.phone || "Not specified"}
+                </strong>
+              </div>
+
+              <div style={pageStyles.row}>
+                <span style={{ color: "#6b7280" }}>City</span>
+                <strong>{userProfile.city || "Not specified"}</strong>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingTop: "8px", borderTop: "1px solid #f3f4f6" }}>
+                <span style={{ color: "#6b7280", flexShrink: 0 }}>Business Address</span>
+                <strong style={{ textAlign: "right", maxWidth: "60%", color: userProfile.address ? "#111827" : "#9ca3af" }}>
+                  {userProfile.address || "Not specified"}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {/* STORE & DATA ISOLATION METRICS */}
+          <div
+            style={{
+              background: "white",
+              padding: "24px",
+              borderRadius: "16px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.06)"
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "18px", fontSize: "18px" }}>
+              🏬 Your Business Summary
+            </h3>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "12px" }}>
+                <small style={{ color: "#64748b" }}>Your Products</small>
+                <div style={{ fontSize: "20px", fontWeight: "700", marginTop: "4px" }}>{products.length}</div>
+              </div>
+
+              <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "12px" }}>
+                <small style={{ color: "#64748b" }}>Current Stock</small>
+                <div style={{ fontSize: "20px", fontWeight: "700", marginTop: "4px" }}>{summary.total_stock || 0} units</div>
+              </div>
+
+              <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "12px" }}>
+                <small style={{ color: "#64748b" }}>Total Sales</small>
+                <div style={{ fontSize: "20px", fontWeight: "700", marginTop: "4px" }}>{sales.length} orders</div>
+              </div>
+
+              <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "12px" }}>
+                <small style={{ color: "#64748b" }}>Total Revenue</small>
+                <div style={{ fontSize: "20px", fontWeight: "700", color: "#059669", marginTop: "4px" }}>
+                  {money(summary.total_revenue)}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: "18px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                background: "#eff6ff",
+                border: "1px solid #dbeafe",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                fontSize: "13px",
+                color: "#1e40af"
+              }}
+            >
+              <span>🔒</span>
+              <span>
+                <strong>Private Workspace:</strong> Your inventory, sales, and AI predictions are completely isolated to this customer account.
+              </span>
+            </div>
+          </div>
+        </div>
+      </Page>
+    );
+  };
+
 
   // ==========================================
   // PAGE COMPONENT
@@ -1900,6 +2960,9 @@ setSales(getArray(data[8]));
           <RecommendationsPage />
         );
 
+      case "profile":
+        return <ProfilePage />;
+
       default:
         return <Dashboard />;
     }
@@ -1933,6 +2996,49 @@ setSales(getArray(data[8]));
 
           </div>
 
+        </div>
+
+        {/* LOGGED IN USER CARD */}
+        <div
+          onClick={() => setPage("profile")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "10px 12px",
+            margin: "12px 14px 16px 14px",
+            borderRadius: "10px",
+            background: page === "profile" ? "rgba(59, 130, 246, 0.2)" : "rgba(255, 255, 255, 0.06)",
+            border: page === "profile" ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid rgba(255, 255, 255, 0.1)",
+            cursor: "pointer",
+            transition: "all 0.2s ease"
+          }}
+        >
+          <div
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: "700",
+              fontSize: "14px",
+              flexShrink: 0
+            }}
+          >
+            {userProfile.full_name?.charAt(0)?.toUpperCase() || "U"}
+          </div>
+          <div style={{ overflow: "hidden" }}>
+            <strong style={{ display: "block", color: "#f3f4f6", fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {userProfile.full_name || "My Account"}
+            </strong>
+            <small style={{ color: "#9ca3af", fontSize: "11px", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {userProfile.phone || userProfile.email || "View details"}
+            </small>
+          </div>
         </div>
 
         <div className="nav-title">
@@ -2027,6 +3133,7 @@ setSales(getArray(data[8]));
 }
 
 // ==========================================
+
 // INLINE PAGE STYLES
 // ==========================================
 const productInputStyle = {

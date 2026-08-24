@@ -1,30 +1,41 @@
 const pool = require("../config/db");
 
 // =====================================
-// CREATE SALE
+// CREATE SALE (CUSTOMER-SCOPED)
 // =====================================
 
 const createSale = async (sale) => {
+    const {
+        customer_id,
+        product_id,
+        store_id,
+        sale_date,
+        units_sold,
+        selling_price
+    } = sale;
 
+    // 1. Verify product belongs to customer & fetch cost
     const [productRows] = await pool.execute(
-        "SELECT cost FROM products WHERE product_id = ?",
-        [sale.product_id]
+        "SELECT cost, price, product_name FROM products WHERE customer_id = ? AND product_id = ?",
+        [customer_id, product_id]
     );
 
     if (productRows.length === 0) {
-        throw new Error("Product not found");
+        throw new Error("Product not found or does not belong to this user");
     }
 
     const cost = Number(productRows[0].cost || 0);
-    const unitsSold = Number(sale.units_sold || 0);
-    const sellingPrice = Number(sale.selling_price || 0);
+    const unitsSold = Number(units_sold || 0);
+    const price = selling_price !== undefined ? Number(selling_price) : Number(productRows[0].price || 0);
 
-    const revenue = unitsSold * sellingPrice;
+    const revenue = unitsSold * price;
     const profit = revenue - (unitsSold * cost);
 
+    // 2. Insert Sale Record
     const sql = `
         INSERT INTO sales
         (
+            customer_id,
             product_id,
             store_id,
             sale_date,
@@ -36,15 +47,39 @@ const createSale = async (sale) => {
         VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
-    const [result] = await pool.execute(sql, [
-        sale.product_id,
-        sale.store_id || null,
-        sale.sale_date,
-        unitsSold,
-        sellingPrice,
-        revenue,
-        profit
-    ]);
+    const [result] = await pool.execute(
+        `INSERT INTO sales
+        (customer_id, product_id, store_id, sale_date, units_sold, selling_price, revenue, profit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            customer_id,
+            product_id,
+            store_id || null,
+            sale_date,
+            unitsSold,
+            price,
+            revenue,
+            profit
+        ]
+    );
+
+    // 3. Deduct stock from Inventory if an inventory record exists for this product & store
+    if (store_id) {
+        await pool.execute(
+            `UPDATE inventory 
+             SET current_stock = GREATEST(0, current_stock - ?)
+             WHERE customer_id = ? AND product_id = ? AND store_id = ?`,
+            [unitsSold, customer_id, product_id, store_id]
+        );
+    } else {
+        await pool.execute(
+            `UPDATE inventory 
+             SET current_stock = GREATEST(0, current_stock - ?)
+             WHERE customer_id = ? AND product_id = ?
+             LIMIT 1`,
+            [unitsSold, customer_id, product_id]
+        );
+    }
 
     return {
         insertId: result.insertId,
@@ -55,50 +90,57 @@ const createSale = async (sale) => {
 
 
 // =====================================
-// GET ALL SALES
+// GET ALL SALES (CUSTOMER-SCOPED)
 // =====================================
 
-const getSales = async () => {
-
-    const [rows] = await pool.execute(`
-        SELECT *
-        FROM sales
-        ORDER BY sale_date DESC, id DESC
-    `);
+const getSales = async (customerId) => {
+    const [rows] = await pool.execute(
+        `SELECT s.*, p.product_name, p.category
+         FROM sales s
+         LEFT JOIN products p 
+           ON s.product_id = p.product_id AND s.customer_id = p.customer_id
+         WHERE s.customer_id = ?
+         ORDER BY s.sale_date DESC, s.id DESC`,
+        [customerId]
+    );
 
     return rows;
 };
 
 
 // =====================================
-// GET SALES BY PRODUCT
+// GET SALES BY PRODUCT (CUSTOMER-SCOPED)
 // =====================================
 
-const getSalesByProduct = async (productId) => {
-
-    const [rows] = await pool.execute(`
-        SELECT *
-        FROM sales
-        WHERE product_id = ?
-        ORDER BY sale_date DESC, id DESC
-    `, [productId]);
+const getSalesByProduct = async (customerId, productId) => {
+    const [rows] = await pool.execute(
+        `SELECT s.*, p.product_name, p.category
+         FROM sales s
+         LEFT JOIN products p 
+           ON s.product_id = p.product_id AND s.customer_id = p.customer_id
+         WHERE s.customer_id = ? AND s.product_id = ?
+         ORDER BY s.sale_date DESC, s.id DESC`,
+        [customerId, productId]
+    );
 
     return rows;
 };
 
 
 // =====================================
-// GET SALES BY STORE
+// GET SALES BY STORE (CUSTOMER-SCOPED)
 // =====================================
 
-const getSalesByStore = async (storeId) => {
-
-    const [rows] = await pool.execute(`
-        SELECT *
-        FROM sales
-        WHERE store_id = ?
-        ORDER BY sale_date DESC, id DESC
-    `, [storeId]);
+const getSalesByStore = async (customerId, storeId) => {
+    const [rows] = await pool.execute(
+        `SELECT s.*, p.product_name, p.category
+         FROM sales s
+         LEFT JOIN products p 
+           ON s.product_id = p.product_id AND s.customer_id = p.customer_id
+         WHERE s.customer_id = ? AND s.store_id = ?
+         ORDER BY s.sale_date DESC, s.id DESC`,
+        [customerId, storeId]
+    );
 
     return rows;
 };
@@ -109,4 +151,4 @@ module.exports = {
     getSales,
     getSalesByProduct,
     getSalesByStore
-};
+};

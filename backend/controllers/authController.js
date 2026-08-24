@@ -283,10 +283,68 @@ const updateProfile = async (req, res) => {
 
 
 
+// =============================
+// RESET / FORGOT PASSWORD
+// =============================
+const resetPassword = async (req, res) => {
+    try {
+        const { email, new_password } = req.body;
+
+        if (!email || !new_password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and new password are required"
+            });
+        }
+
+        if (new_password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters long"
+            });
+        }
+
+        const [rows] = await db.query(
+            "SELECT customer_id, full_name, email FROM customers WHERE email = ?",
+            [email]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No account found with this email address"
+            });
+        }
+
+        const password_hash = await bcrypt.hash(new_password, 10);
+
+        await db.query(
+            "UPDATE customers SET password_hash = ? WHERE email = ?",
+            [password_hash, email]
+        );
+
+        return res.json({
+            success: true,
+            message: "Password has been reset successfully! You can now log in with your new password."
+        });
+
+    } catch (error) {
+        console.error("Reset password error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error during password reset",
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     signup,
     login,
     getProfile,
-    updateProfile
+    updateProfile,
+    resetPassword
 };
+
 

@@ -1,6 +1,6 @@
 const express = require("express");
-
 const router = express.Router();
+const authMiddleware = require("../middleware/authMiddleware");
 
 const {
     getSummary,
@@ -10,6 +10,8 @@ const {
     getStorePerformance
 } = require("../controllers/analyticsController");
 
+// All analytics routes require authentication
+router.use(authMiddleware);
 
 // Dashboard summary
 router.get("/summary", getSummary);
@@ -26,5 +28,4 @@ router.get("/low-stock", getLowStock);
 // Store performance
 router.get("/store-performance", getStorePerformance);
 
-
-module.exports = router;
+module.exports = router;

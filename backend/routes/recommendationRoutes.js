@@ -1,16 +1,17 @@
 const express = require("express");
-
 const router = express.Router();
+const authMiddleware = require("../middleware/authMiddleware");
 
 const {
     getRecommendations,
     getRecommendationByProduct
 } = require("../controllers/recommendationController");
 
+// All recommendation routes require authentication
+router.use(authMiddleware);
 
-// GET all recommendations
+// GET all recommendations for the authenticated user
 router.get("/", getRecommendations);
-
 
 // GET recommendation for one product
 router.get(
@@ -18,5 +19,4 @@ router.get(
     getRecommendationByProduct
 );
 
-
-module.exports = router;
+module.exports = router;

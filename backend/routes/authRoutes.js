@@ -7,16 +7,20 @@ const {
     signup,
     login,
     getProfile,
-    updateProfile
+    updateProfile,
+    resetPassword
 } = require("../controllers/authController");
 const authMiddleware = require("../middleware/authMiddleware");
-
 
 // Create customer account
 router.post("/signup", signup);
 
 // Customer login
 router.post("/login", login);
+
+// Reset / Forgot password
+router.post("/forgot-password", resetPassword);
+router.post("/reset-password", resetPassword);
 
 // Get customer profile
 router.get("/profile", authMiddleware, getProfile);
@@ -25,4 +29,5 @@ router.get("/profile", authMiddleware, getProfile);
 router.put("/profile", authMiddleware, updateProfile);
 
 module.exports = router;
+
 
