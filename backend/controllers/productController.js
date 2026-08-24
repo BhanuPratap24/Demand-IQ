@@ -7,6 +7,7 @@ const Product = require("../models/productModel");
 const addProduct = async (req, res) => {
     try {
 
+        const customer_id = req.user.customer_id;
         const product = req.body;
 
         // Basic validation
@@ -22,7 +23,7 @@ const addProduct = async (req, res) => {
         // =====================================
 
         const existingProduct =
-            await Product.getProductById(product.product_id);
+            await Product.getCustomerProduct(customer_id, product.product_id);
 
         // =====================================
         // PRODUCT ALREADY EXISTS
@@ -44,7 +45,10 @@ const addProduct = async (req, res) => {
         // =====================================
 
         const result =
-            await Product.createProduct(product);
+            await Product.createProduct({
+                ...product,
+                customer_id
+            });
 
         res.status(201).json({
             success: true,
@@ -77,8 +81,10 @@ const getProducts = async (req, res) => {
 
     try {
 
+        const customer_id = req.user.customer_id;
+
         const products =
-            await Product.getProducts();
+            await Product.getProducts(customer_id);
 
         res.json({
             success: true,

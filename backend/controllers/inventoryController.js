@@ -186,8 +186,8 @@ const getInventoryByProduct = async (req, res) => {
 
         const data =
             await inventoryModel.getInventoryByProduct(
-                customerId,
-                productId
+                productId,
+                customerId
             );
 
         return res.json({
@@ -220,7 +220,6 @@ const updateStock = async (req, res) => {
 
     try {
 
-        const customerId = req.user.customer_id;
         const { id } = req.params;
 
         const {
@@ -246,7 +245,6 @@ const updateStock = async (req, res) => {
 
         const result =
             await inventoryModel.updateStock(
-                customerId,
                 id,
                 stock,
                 minimum_stock ?? 10

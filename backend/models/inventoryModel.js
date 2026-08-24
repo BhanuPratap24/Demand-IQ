@@ -1,6 +1,22 @@
 const pool = require("../config/db");
 
 // =====================================
+// GET CUSTOMER PRODUCT (CHECK OWNERSHIP)
+// =====================================
+
+const getCustomerProduct = async (customer_id, product_id) => {
+
+    const [rows] = await pool.execute(
+        `SELECT * FROM products
+         WHERE customer_id = ? AND product_id = ?`,
+        [customer_id, product_id]
+    );
+
+    return rows[0] || null;
+};
+
+
+// =====================================
 // CREATE INVENTORY
 // =====================================
 
@@ -46,8 +62,8 @@ const getInventory = async (customerId) => {
             p.cost
         FROM inventory i
         INNER JOIN products p
-            ON p.customer_id = i.customer_id
-            AND p.product_id = i.product_id
+            ON p.product_id = i.product_id
+            AND p.customer_id = i.customer_id
         WHERE i.customer_id = ?
         ORDER BY i.updated_at DESC
         `,
@@ -85,69 +101,34 @@ const getInventoryByProduct = async (
 
 
 // =====================================
-// UPDATE STOCK - OWN DATA ONLY
+// UPDATE STOCK - PURE MODEL FUNCTION
 // =====================================
 
-const updateStock = async (req, res) => {
+const updateStock = async (
+    id,
+    currentStock,
+    minimumStock
+) => {
 
-    try {
+    const sql = `
+        UPDATE inventory
+        SET current_stock = ?,
+            minimum_stock = ?
+        WHERE id = ?
+    `;
 
-        const customer_id =
-            req.user.customer_id;
+    const [result] = await pool.execute(sql, [
+        currentStock,
+        minimumStock ?? 10,
+        id
+    ]);
 
-        const { id } = req.params;
-
-        const {
-            current_stock,
-            minimum_stock
-        } = req.body;
-
-        if (current_stock === undefined) {
-            return res.status(400).json({
-                success: false,
-                message:
-                    "current_stock is required"
-            });
-        }
-
-        const result =
-            await inventoryModel.updateStock(
-                id,
-                customer_id,
-                Number(current_stock),
-                minimum_stock
-            );
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({
-                success: false,
-                message:
-                    "Inventory not found or does not belong to you"
-            });
-        }
-
-        return res.json({
-            success: true,
-            message:
-                "Inventory updated successfully"
-        });
-
-    } catch (error) {
-
-        console.error(
-            "Update Stock Error:",
-            error
-        );
-
-        return res.status(500).json({
-            success: false,
-            message:
-                "Failed to update inventory"
-        });
-    }
+    return result;
 };
 
+
 module.exports = {
+    getCustomerProduct,
     createInventory,
     getInventory,
     getInventoryByProduct,

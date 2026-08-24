@@ -9,6 +9,7 @@ const createProduct = async (product) => {
     const sql = `
         INSERT INTO products
         (
+            customer_id,
             product_id,
             product_name,
             category,
@@ -16,10 +17,11 @@ const createProduct = async (product) => {
             cost,
             expiry_date
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await pool.execute(sql, [
+        product.customer_id,
         product.product_id,
         product.product_name,
         product.category || null,
@@ -33,13 +35,14 @@ const createProduct = async (product) => {
 
 
 // =====================================
-// GET ALL PRODUCTS
+// GET ALL PRODUCTS (BY CUSTOMER)
 // =====================================
 
-const getProducts = async () => {
+const getProducts = async (customerId) => {
 
     const [rows] = await pool.execute(
-        "SELECT * FROM products ORDER BY created_at DESC"
+        "SELECT * FROM products WHERE customer_id = ? ORDER BY created_at DESC",
+        [customerId]
     );
 
     return rows;
@@ -47,7 +50,7 @@ const getProducts = async () => {
 
 
 // =====================================
-// GET PRODUCT BY ID
+// GET PRODUCT BY ID (GLOBAL)
 // =====================================
 
 const getProductById = async (productId) => {
@@ -62,11 +65,27 @@ const getProductById = async (productId) => {
 
 
 // =====================================
+// GET PRODUCT BY CUSTOMER + PRODUCT_ID
+// =====================================
+
+const getCustomerProduct = async (customerId, productId) => {
+
+    const [rows] = await pool.execute(
+        "SELECT * FROM products WHERE customer_id = ? AND product_id = ?",
+        [customerId, productId]
+    );
+
+    return rows[0];
+};
+
+
+// =====================================
 // EXPORT
 // =====================================
 
 module.exports = {
     createProduct,
     getProducts,
-    getProductById
+    getProductById,
+    getCustomerProduct
 };

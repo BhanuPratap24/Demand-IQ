@@ -106,6 +106,7 @@ const getLowStock = async () => {
         FROM inventory i
         LEFT JOIN products p
             ON i.product_id = p.product_id
+            AND i.customer_id = p.customer_id
         WHERE i.current_stock <= i.minimum_stock
         ORDER BY i.current_stock ASC
     `);
