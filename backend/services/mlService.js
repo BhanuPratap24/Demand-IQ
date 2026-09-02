@@ -92,17 +92,26 @@ const predictDemand = async (productData) => {
         return response.data.data;
 
     } catch (error) {
-        console.error("ML Service Error:", error.message);
+        if (error.response) {
+            console.error(`[ML Service Error] HTTP ${error.response.status}:`, JSON.stringify(error.response.data));
+        } else if (error.request) {
+            console.error(`[ML Service Error] No response from ML service at ${ML_SERVICE_URL}:`, error.message);
+        } else {
+            console.error("[ML Service Error]:", error.message);
+        }
         
-        // Return fallback recommendation if ML service fails
+        // Return fallback recommendation only if ML service fails
+        const currentStock = Number(productData["Inventory Level"] || productData.current_stock || productData.inventory_level || 0);
         return {
             status: "fallback",
-            message: "Using fallback recommendation (ML service unavailable)",
-            predicted_demand: productData["Inventory Level"] ? 0 : 10,
-            current_stock: Number(productData["Inventory Level"]) || 0,
-            recommendation: productData["Inventory Level"] <= 0 ? "URGENT REORDER" : "KEEP CURRENT STOCK",
-            reorder_quantity: productData["Inventory Level"] <= 0 ? 50 : 0,
-            reason: "ML service unavailable - using baseline calculation"
+            message: `Using fallback recommendation (ML service unavailable: ${error.message})`,
+            predicted_demand: currentStock > 0 ? Math.round(currentStock * 0.8) : 10,
+            current_stock: currentStock,
+            safety_stock: Math.round((currentStock > 0 ? currentStock * 0.8 : 10) * 0.1),
+            required_stock: Math.round((currentStock > 0 ? currentStock * 0.8 : 10) * 1.1),
+            recommendation: currentStock <= 0 ? "URGENT REORDER" : "KEEP CURRENT STOCK",
+            reorder_quantity: currentStock <= 0 ? 50 : 0,
+            reason: `ML service unavailable (${error.message}) - using baseline calculation`
         };
     }
 };

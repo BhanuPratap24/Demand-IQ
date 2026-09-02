@@ -4,7 +4,8 @@ const authMiddleware = require("../middleware/authMiddleware");
 
 const {
     getRecommendations,
-    getRecommendationByProduct
+    getRecommendationByProduct,
+    predictNow
 } = require("../controllers/recommendationController");
 
 // All recommendation routes require authentication
@@ -18,5 +19,8 @@ router.get(
     "/product/:productId",
     getRecommendationByProduct
 );
+
+// POST direct ML prediction — no DB history needed
+router.post("/predict-now", predictNow);
 
 module.exports = router;

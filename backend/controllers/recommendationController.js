@@ -164,7 +164,76 @@ const getRecommendationByProduct = async (req, res) => {
 };
 
 
+// =====================================
+// DIRECT ML PREDICTION (NO DB HISTORY NEEDED)
+// =====================================
+
+const predictNow = async (req, res) => {
+    try {
+        const body = req.body;
+
+        if (!body || Object.keys(body).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Product data is required in request body"
+            });
+        }
+
+        // Helper to extract values from multiple key conventions (camelCase, snake_case, Spaced)
+        const getVal = (...keys) => {
+            for (const k of keys) {
+                if (body[k] !== undefined && body[k] !== null) return body[k];
+            }
+            return undefined;
+        };
+
+        const price = Number(getVal("price", "Price", "sellingPrice", "selling_price")) || 100;
+        const holidayRaw = getVal("holiday_promotion", "Holiday/Promotion", "holidayPromotion", "holiday");
+        const holidayVal = typeof holidayRaw === "string"
+            ? (["yes", "1", "true", "y"].includes(holidayRaw.trim().toLowerCase()) ? 1 : 0)
+            : Number(holidayRaw || 0);
+
+        // Build enriched input for the ML service
+        const mlInput = {
+            Date: getVal("date", "Date") || new Date().toISOString().split("T")[0],
+            "Store ID": String(getVal("store_id", "Store ID", "storeId") || "S001"),
+            "Product ID": String(getVal("product_id", "Product ID", "productId") || "P001"),
+            Category: String(getVal("category", "Category") || "Groceries"),
+            Region: String(getVal("region", "Region") || "North"),
+            Price: price,
+            Discount: Number(getVal("discount", "Discount") || 0),
+            Cost: Number(getVal("cost", "Cost", "costPrice", "cost_price") || 50),
+            "Competitor Pricing": Number(getVal("competitor_pricing", "Competitor Pricing", "competitorPrice", "competitor_price") || price),
+            "Weather Condition": String(getVal("weather_condition", "Weather Condition", "weatherCondition") || "Clear"),
+            Seasonality: String(getVal("seasonality", "Seasonality") || "Normal"),
+            "Holiday/Promotion": holidayVal,
+            "Inventory Level": Number(getVal("inventory_level", "Inventory Level", "currentInventory", "current_stock", "currentStock") || 0),
+            Units_Sold_Lag1: Number(getVal("units_sold_lag1", "Units_Sold_Lag1", "unitsSoldYesterday", "units_sold_yesterday") || 0),
+            Units_Sold_RollingMean7: Number(getVal("units_sold_rolling7", "Units_Sold_RollingMean7", "rolling7DayAverage", "rolling_7_day_average") || 0),
+            StoreProduct_AvgDemand: Number(getVal("store_product_avg", "StoreProduct_AvgDemand", "storeProductAverage", "store_product_average") || 0)
+        };
+
+        const mlPrediction = await predictDemand(mlInput);
+
+        return res.json({
+            success: true,
+            input: mlInput,
+            prediction: mlPrediction
+        });
+
+    } catch (error) {
+        console.error("Predict Now Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Prediction failed",
+            error: error.message
+        });
+    }
+};
+
+
 module.exports = {
     getRecommendations,
-    getRecommendationByProduct
-};
+    getRecommendationByProduct,
+    predictNow
+};

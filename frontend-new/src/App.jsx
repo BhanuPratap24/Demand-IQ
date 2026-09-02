@@ -300,17 +300,23 @@ function App() {
       const inventoryList = getArray(data[7]);
 
       const productsWithStock = productList.map((product) => {
-        const inventory = inventoryList.find(
+        const matchingInventories = inventoryList.filter(
           (item) =>
             String(item.product_id) ===
             String(product.product_id)
         );
 
+        const totalStock = matchingInventories.reduce(
+          (sum, item) => sum + Number(item.current_stock || 0),
+          0
+        );
+
+        const primaryStore = matchingInventories[0]?.store_id || "";
+
         return {
           ...product,
-          quantity: inventory
-            ? Number(inventory.current_stock || 0)
-            : 0,
+          store_id: primaryStore,
+          quantity: totalStock,
         };
       });
 
@@ -1057,11 +1063,9 @@ function App() {
 
                     </div>
 
-                    <span>
-                      {item.stock ||
-                        item.quantity ||
-                        0}{" "}
-                      left
+                    <span style={{ fontWeight: "700", color: (item.current_stock ?? 0) === 0 ? "#ef4444" : "#f59e0b" }}>
+                      {item.current_stock ?? 0}{" "}
+                      units left
                     </span>
 
                   </div>
@@ -2020,8 +2024,13 @@ function App() {
         const updated = { ...prev, [name]: value };
         if (name === "product_id") {
           const selectedProd = products.find(p => p.product_id === value);
-          if (selectedProd && !prev.selling_price) {
-            updated.selling_price = selectedProd.price || "";
+          if (selectedProd) {
+            if (!prev.selling_price) {
+              updated.selling_price = selectedProd.price || "";
+            }
+            if (selectedProd.store_id) {
+              updated.store_id = selectedProd.store_id;
+            }
           }
         }
         return updated;
@@ -2043,7 +2052,7 @@ function App() {
 
         const salePayload = {
           product_id: saleForm.product_id.trim(),
-          store_id: saleForm.store_id.trim() || "Store-1",
+          store_id: saleForm.store_id?.trim() || undefined,
           sale_date: saleForm.sale_date,
           units_sold: Number(saleForm.units_sold),
           selling_price: saleForm.selling_price ? Number(saleForm.selling_price) : undefined
@@ -2385,94 +2394,485 @@ function App() {
   // RECOMMENDATIONS PAGE (AI & ML ENHANCED)
   // ==========================================
 
-  const RecommendationsPage = () => (
-    <Page
-      title="AI Demand Forecasting & Recommendations"
-      subtitle="Machine learning driven inventory insights and replenishment actions"
-    >
-      {recommendations.length === 0 ? (
-        <div style={pageStyles.empty}>
-          No products or recommendations available. Add products to generate AI forecasts.
-        </div>
-      ) : (
-        <div style={pageStyles.recommendationGrid}>
-          {recommendations.map((item, index) => {
-            const isReorder = item.action !== "NO REORDER" && item.ml_recommendation !== "KEEP CURRENT STOCK";
-            return (
-              <div
-                key={index}
+  const RecommendationsPage = () => {
+    const [predForm, setPredForm] = useState({
+      product_id: "",
+      store_id: "S001",
+      category: "Groceries",
+      region: "North",
+      price: "",
+      cost: "",
+      discount: "0",
+      competitor_pricing: "",
+      weather_condition: "Clear",
+      seasonality: "Normal",
+      holiday_promotion: "0",
+      inventory_level: "",
+      units_sold_lag1: "0",
+      units_sold_rolling7: "0",
+      store_product_avg: "0",
+    });
+    const [predResult, setPredResult] = useState(null);
+    const [predLoading, setPredLoading] = useState(false);
+    const [predError, setPredError] = useState("");
+    const [showPredForm, setShowPredForm] = useState(true);
+
+    const handlePredChange = (e) => {
+      const { name, value } = e.target;
+      setPredForm(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handlePredict = async (e) => {
+      e.preventDefault();
+      setPredLoading(true);
+      setPredError("");
+      setPredResult(null);
+      try {
+        const token = localStorage.getItem("demandiq_token");
+        const payload = {
+          ...predForm,
+          price: Number(predForm.price),
+          cost: Number(predForm.cost),
+          discount: Number(predForm.discount),
+          competitor_pricing: Number(predForm.competitor_pricing) || Number(predForm.price),
+          holiday_promotion: Number(predForm.holiday_promotion),
+          inventory_level: Number(predForm.inventory_level),
+          units_sold_lag1: Number(predForm.units_sold_lag1),
+          units_sold_rolling7: Number(predForm.units_sold_rolling7),
+          store_product_avg: Number(predForm.store_product_avg),
+        };
+        const res = await fetch(`${API}/recommendations/predict-now`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Prediction failed");
+        setPredResult(data.prediction);
+      } catch (err) {
+        setPredError(err.message || "Prediction failed. Make sure all services are running.");
+      } finally {
+        setPredLoading(false);
+      }
+    };
+
+    const recColor = (rec) => {
+      if (!rec) return { bg: "#dcfce7", color: "#16a34a" };
+      if (rec.includes("URGENT")) return { bg: "#fee2e2", color: "#dc2626" };
+      if (rec.includes("INCREASE") || rec.includes("REORDER")) return { bg: "#fff7ed", color: "#c2410c" };
+      if (rec.includes("REDUCE")) return { bg: "#eff6ff", color: "#2563eb" };
+      return { bg: "#dcfce7", color: "#16a34a" };
+    };
+
+    const priorityBadge = (priority) => {
+      const map = {
+        HIGH: { bg: "#fee2e2", color: "#dc2626", label: "🔴 HIGH" },
+        MEDIUM: { bg: "#fff7ed", color: "#ea580c", label: "🟠 MEDIUM" },
+        LOW: { bg: "#dcfce7", color: "#16a34a", label: "🟢 LOW" },
+        INFO: { bg: "#eff6ff", color: "#2563eb", label: "🔵 INFO" },
+      };
+      return map[priority] || map.INFO;
+    };
+
+    const iStyle = {
+      width: "100%", boxSizing: "border-box",
+      padding: "10px 12px", border: "1px solid #334155",
+      borderRadius: "8px", fontSize: "13px",
+      background: "#0f1c2e", color: "#e2e8f0",
+      outline: "none", marginTop: "5px",
+    };
+
+    return (
+      <Page
+        title="AI Demand Forecasting & Recommendations"
+        subtitle="Machine learning driven demand predictions and inventory replenishment insights"
+      >
+        {/* ================================================ */}
+        {/* LIVE ML PREDICTION FORM                         */}
+        {/* ================================================ */}
+        <div style={{
+          background: "linear-gradient(135deg, #0a0f1e 0%, #0d1a35 100%)",
+          border: "1px solid #1e3a5f",
+          borderRadius: "20px",
+          padding: "28px",
+          marginBottom: "32px",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+        }}>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+                <div style={{
+                  background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+                  borderRadius: "10px", padding: "8px 12px",
+                  fontSize: "16px", fontWeight: "800", color: "white"
+                }}>🔮 ML</div>
+                <h2 style={{ margin: 0, color: "#f1f5f9", fontSize: "20px", fontWeight: "800" }}>
+                  Live Demand Predictor
+                </h2>
+              </div>
+              <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
+                XGBoost / Random Forest model — enter product details to get instant AI demand prediction
+              </p>
+            </div>
+            <button
+              onClick={() => { setShowPredForm(p => !p); setPredResult(null); setPredError(""); }}
+              style={{
+                padding: "8px 18px", border: "1px solid #334155", borderRadius: "10px",
+                background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: "13px", fontWeight: "600"
+              }}
+            >
+              {showPredForm ? "▲ Hide Form" : "▼ Show Form"}
+            </button>
+          </div>
+
+          {showPredForm && (
+            <form onSubmit={handlePredict}>
+              {/* Row 1: Product Identification */}
+              <p style={{ color: "#475569", fontSize: "11px", fontWeight: "700", letterSpacing: "0.08em", marginBottom: "10px", marginTop: 0 }}>PRODUCT IDENTIFICATION</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px", marginBottom: "20px" }}>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Product ID</label>
+                  <input name="product_id" value={predForm.product_id} onChange={handlePredChange} placeholder="e.g. P036" style={iStyle} required />
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Store ID</label>
+                  <input name="store_id" value={predForm.store_id} onChange={handlePredChange} placeholder="e.g. S014" style={iStyle} required />
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Category</label>
+                  <select name="category" value={predForm.category} onChange={handlePredChange} style={iStyle}>
+                    <option>Groceries</option>
+                    <option>Electronics</option>
+                    <option>Clothing</option>
+                    <option>Beverages</option>
+                    <option>Furniture</option>
+                    <option>Toys</option>
+                    <option>Sports</option>
+                    <option>General</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Region</label>
+                  <select name="region" value={predForm.region} onChange={handlePredChange} style={iStyle}>
+                    <option>North</option>
+                    <option>South</option>
+                    <option>East</option>
+                    <option>West</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: Pricing */}
+              <p style={{ color: "#475569", fontSize: "11px", fontWeight: "700", letterSpacing: "0.08em", marginBottom: "10px" }}>PRICING</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "14px", marginBottom: "20px" }}>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Selling Price (₹)</label>
+                  <input type="number" min="0" name="price" value={predForm.price} onChange={handlePredChange} placeholder="e.g. 50" style={iStyle} required />
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Cost Price (₹)</label>
+                  <input type="number" min="0" name="cost" value={predForm.cost} onChange={handlePredChange} placeholder="e.g. 30" style={iStyle} required />
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Discount (%)</label>
+                  <input type="number" min="0" max="100" name="discount" value={predForm.discount} onChange={handlePredChange} placeholder="e.g. 5" style={iStyle} />
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Competitor Price (₹)</label>
+                  <input type="number" min="0" name="competitor_pricing" value={predForm.competitor_pricing} onChange={handlePredChange} placeholder="e.g. 52" style={iStyle} />
+                </div>
+              </div>
+
+              {/* Row 3: Market Conditions */}
+              <p style={{ color: "#475569", fontSize: "11px", fontWeight: "700", letterSpacing: "0.08em", marginBottom: "10px" }}>MARKET CONDITIONS</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "14px", marginBottom: "20px" }}>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Weather Condition</label>
+                  <select name="weather_condition" value={predForm.weather_condition} onChange={handlePredChange} style={iStyle}>
+                    <option>Clear</option>
+                    <option>Sunny</option>
+                    <option>Rainy</option>
+                    <option>Cloudy</option>
+                    <option>Snowy</option>
+                    <option>Windy</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Seasonality</label>
+                  <select name="seasonality" value={predForm.seasonality} onChange={handlePredChange} style={iStyle}>
+                    <option>Normal</option>
+                    <option>Summer</option>
+                    <option>Winter</option>
+                    <option>Monsoon</option>
+                    <option>Festival</option>
+                    <option>Holiday</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Holiday / Promotion</label>
+                  <select name="holiday_promotion" value={predForm.holiday_promotion} onChange={handlePredChange} style={iStyle}>
+                    <option value="0">No (0)</option>
+                    <option value="1">Yes (1)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Current Inventory (units)</label>
+                  <input type="number" min="0" name="inventory_level" value={predForm.inventory_level} onChange={handlePredChange} placeholder="e.g. 70" style={iStyle} required />
+                </div>
+              </div>
+
+              {/* Row 4: Demand History */}
+              <p style={{ color: "#475569", fontSize: "11px", fontWeight: "700", letterSpacing: "0.08em", marginBottom: "10px" }}>DEMAND HISTORY (optional — fill 0 if no history)</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px", marginBottom: "24px" }}>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Units Sold Yesterday</label>
+                  <input type="number" min="0" name="units_sold_lag1" value={predForm.units_sold_lag1} onChange={handlePredChange} placeholder="e.g. 120" style={iStyle} />
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>7-Day Rolling Avg (units)</label>
+                  <input type="number" min="0" name="units_sold_rolling7" value={predForm.units_sold_rolling7} onChange={handlePredChange} placeholder="e.g. 115" style={iStyle} />
+                </div>
+                <div>
+                  <label style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>Store-Product Avg (units)</label>
+                  <input type="number" min="0" name="store_product_avg" value={predForm.store_product_avg} onChange={handlePredChange} placeholder="e.g. 125" style={iStyle} />
+                </div>
+              </div>
+
+              {predError && (
+                <div style={{ padding: "12px 16px", borderRadius: "10px", background: "#450a0a", color: "#fca5a5", fontWeight: "600", marginBottom: "16px", fontSize: "13px" }}>
+                  ⚠ {predError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={predLoading}
                 style={{
-                  ...pageStyles.aiCard,
-                  borderLeft: isReorder ? "4px solid #ef4444" : "4px solid #10b981",
-                  background: "#ffffff",
-                  padding: "20px",
-                  borderRadius: "12px",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px"
+                  width: "100%", padding: "14px",
+                  background: predLoading ? "#334155" : "linear-gradient(135deg, #2563eb, #7c3aed)",
+                  color: "white", border: "none", borderRadius: "12px",
+                  fontWeight: "700", fontSize: "16px", cursor: predLoading ? "not-allowed" : "pointer",
+                  boxShadow: predLoading ? "none" : "0 8px 25px rgba(37, 99, 235, 0.4)",
+                  transition: "all 0.2s ease", letterSpacing: "0.02em"
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={pageStyles.badge}>{item.product_id}</span>
-                  <span
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: "20px",
-                      fontSize: "12px",
-                      fontWeight: "700",
-                      background: isReorder ? "#fee2e2" : "#dcfce7",
-                      color: isReorder ? "#dc2626" : "#16a34a"
-                    }}
-                  >
-                    {item.ml_recommendation || item.action || "NO REORDER"}
-                  </span>
+                {predLoading ? "⏳ Running AI Model..." : "🔮 Run AI Demand Prediction"}
+              </button>
+            </form>
+          )}
+
+          {/* PREDICTION RESULT */}
+          {predResult && (
+            <div style={{
+              marginTop: "24px", padding: "24px",
+              background: "linear-gradient(135deg, #0c1a2e, #0f2040)",
+              border: "1px solid #1e40af", borderRadius: "16px"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
+                <h3 style={{ margin: 0, color: "#f1f5f9", fontSize: "18px", fontWeight: "800" }}>
+                  📊 Prediction Result
+                </h3>
+                <span style={{
+                  padding: "6px 14px", borderRadius: "20px", fontSize: "13px", fontWeight: "700",
+                  ...recColor(predResult.recommendation)
+                }}>
+                  {predResult.recommendation || "KEEP CURRENT STOCK"}
+                </span>
+              </div>
+
+              {/* Main Metrics Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "14px", marginBottom: "18px" }}>
+                <div style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", padding: "16px", borderRadius: "12px" }}>
+                  <div style={{ color: "#60a5fa", fontSize: "11px", fontWeight: "700", marginBottom: "6px" }}>🔮 PREDICTED DEMAND</div>
+                  <div style={{ color: "#f1f5f9", fontSize: "28px", fontWeight: "900", lineHeight: 1 }}>{predResult.predicted_demand ?? 0}</div>
+                  <div style={{ color: "#94a3b8", fontSize: "12px", marginTop: "4px" }}>units expected</div>
                 </div>
 
-                <h3 style={{ margin: 0, fontSize: "18px" }}>
-                  {item.product_name || item.product_id}
-                </h3>
-                <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>
-                  Category: {item.category || "General"} | Store: {item.store_id || "Main"}
-                </p>
+                <div style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", padding: "16px", borderRadius: "12px" }}>
+                  <div style={{ color: "#34d399", fontSize: "11px", fontWeight: "700", marginBottom: "6px" }}>📦 CURRENT STOCK</div>
+                  <div style={{ color: "#f1f5f9", fontSize: "28px", fontWeight: "900", lineHeight: 1 }}>{predResult.current_stock ?? 0}</div>
+                  <div style={{ color: "#94a3b8", fontSize: "12px", marginTop: "4px" }}>units in inventory</div>
+                </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "6px" }}>
-                  <div style={{ background: "#f8fafc", padding: "10px", borderRadius: "8px" }}>
-                    <small style={{ color: "#64748b" }}>Current Stock</small>
-                    <div style={{ fontSize: "18px", fontWeight: "700" }}>{item.current_stock ?? 0} units</div>
-                  </div>
-                  <div style={{ background: "#eff6ff", padding: "10px", borderRadius: "8px" }}>
-                    <small style={{ color: "#2563eb" }}>🔮 Predicted Demand (7D)</small>
-                    <div style={{ fontSize: "18px", fontWeight: "700", color: "#1d4ed8" }}>
-                      {item.ml_predicted_demand ?? item.predicted_7_day_demand ?? 0} units
+                <div style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", padding: "16px", borderRadius: "12px" }}>
+                  <div style={{ color: "#fbbf24", fontSize: "11px", fontWeight: "700", marginBottom: "6px" }}>🛡️ SAFETY STOCK</div>
+                  <div style={{ color: "#f1f5f9", fontSize: "28px", fontWeight: "900", lineHeight: 1 }}>{predResult.safety_stock ?? 0}</div>
+                  <div style={{ color: "#94a3b8", fontSize: "12px", marginTop: "4px" }}>buffer units (10%)</div>
+                </div>
+
+                <div style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)", padding: "16px", borderRadius: "12px" }}>
+                  <div style={{ color: "#a78bfa", fontSize: "11px", fontWeight: "700", marginBottom: "6px" }}>📋 REQUIRED STOCK</div>
+                  <div style={{ color: "#f1f5f9", fontSize: "28px", fontWeight: "900", lineHeight: 1 }}>{predResult.required_stock ?? 0}</div>
+                  <div style={{ color: "#94a3b8", fontSize: "12px", marginTop: "4px" }}>demand + safety</div>
+                </div>
+              </div>
+
+              {/* Reorder Suggestion */}
+              {(predResult.reorder_quantity > 0) ? (
+                <div style={{
+                  padding: "14px 18px", borderRadius: "12px",
+                  background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)",
+                  display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px"
+                }}>
+                  <span style={{ fontSize: "22px" }}>⚡</span>
+                  <div>
+                    <div style={{ color: "#fca5a5", fontWeight: "700", fontSize: "15px" }}>
+                      Reorder {predResult.reorder_quantity} units now
+                    </div>
+                    <div style={{ color: "#94a3b8", fontSize: "12px", marginTop: "2px" }}>
+                      Stock gap: {Math.abs(predResult.stock_difference ?? 0).toFixed(0)} units below required level
                     </div>
                   </div>
                 </div>
+              ) : (
+                <div style={{
+                  padding: "14px 18px", borderRadius: "12px",
+                  background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)",
+                  display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px"
+                }}>
+                  <span style={{ fontSize: "22px" }}>✅</span>
+                  <div style={{ color: "#6ee7b7", fontWeight: "600", fontSize: "14px" }}>No reorder needed</div>
+                </div>
+              )}
 
-                {(item.ml_reorder_quantity > 0 || item.reorder_quantity > 0) && (
-                  <div style={{ background: "#fff7ed", border: "1px solid #ffedd5", padding: "10px", borderRadius: "8px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#c2410c" }}>
-                      ⚡ Suggested Reorder: {item.ml_reorder_quantity || item.reorder_quantity} units
+              {/* Reason */}
+              <div style={{
+                padding: "12px 16px", borderRadius: "10px",
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)"
+              }}>
+                <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "700" }}>AI INSIGHT: </span>
+                <span style={{ color: "#cbd5e1", fontSize: "13px" }}>{predResult.reason}</span>
+              </div>
+
+              <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981", display: "inline-block" }}></span>
+                <span style={{ color: "#10b981", fontSize: "11px", fontWeight: "600" }}>Powered by XGBoost / Random Forest — DemandIQ ML Model v1.0</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ================================================ */}
+        {/* EXISTING PRODUCT RECOMMENDATIONS                */}
+        {/* ================================================ */}
+        <div style={{ marginBottom: "16px" }}>
+          <h2 style={{ color: "#1e293b", fontSize: "20px", fontWeight: "800", margin: 0 }}>Your Product Recommendations</h2>
+          <p style={{ color: "#64748b", fontSize: "13px", marginTop: "4px" }}>ML-enhanced insights based on your inventory and sales history</p>
+        </div>
+
+        {recommendations.length === 0 ? (
+          <div style={{ ...pageStyles.empty, textAlign: "center" }}>
+            <div style={{ fontSize: "36px", marginBottom: "12px" }}>🧪</div>
+            <strong>No product recommendations yet</strong>
+            <p style={{ color: "#94a3b8", marginTop: "8px", fontSize: "13px" }}>
+              Add products and record sales to generate automatic AI recommendations.<br/>
+              Use the Live Demand Predictor above to test predictions instantly.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: "16px" }}>
+            {recommendations.map((item, index) => {
+              const rec = item.ml_recommendation || item.action || "NO REORDER";
+              const isUrgent = rec.includes("URGENT");
+              const isReorder = rec.includes("REORDER") || rec.includes("INCREASE");
+              const isReduce = rec.includes("REDUCE");
+              const borderColor = isUrgent ? "#ef4444" : isReorder ? "#f97316" : isReduce ? "#3b82f6" : "#10b981";
+              const prio = item.priority || "INFO";
+              const prioStyle = priorityBadge(prio);
+              const recBadge = recColor(rec);
+
+              return (
+                <div
+                  key={index}
+                  style={{
+                    background: "#ffffff",
+                    borderLeft: `5px solid ${borderColor}`,
+                    borderRadius: "14px",
+                    padding: "22px 24px",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+                    display: "flex", flexDirection: "column", gap: "14px",
+                    transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                  }}
+                >
+                  {/* Header Row */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <span style={pageStyles.badge}>{item.product_id}</span>
+                      <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", background: prioStyle.bg, color: prioStyle.color }}>
+                        {prioStyle.label}
+                      </span>
+                      {item.is_ml_available && (
+                        <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", background: "#ecfdf5", color: "#059669" }}>● ML Active</span>
+                      )}
+                    </div>
+                    <span style={{ padding: "5px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", ...recBadge }}>
+                      {rec}
                     </span>
                   </div>
-                )}
 
-                <div style={{ fontSize: "13px", color: "#4b5563", background: "#f9fafb", padding: "10px", borderRadius: "8px" }}>
-                  <strong>Insight: </strong>{item.ml_reason || item.reason || "Inventory is optimal."}
-                </div>
-
-                {item.is_ml_available && (
-                  <div style={{ fontSize: "11px", color: "#059669", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
-                    <span>●</span> Powered by XGBoost / Random Forest Demand Model
+                  {/* Product Name */}
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "18px", color: "#0f172a", fontWeight: "700" }}>
+                      {item.product_name || item.product_id}
+                    </h3>
+                    <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "#64748b" }}>
+                      {item.category || "General"} &nbsp;·&nbsp; Store: {item.store_id || "Main"}
+                    </p>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Page>
-  );
+
+                  {/* Metrics Grid */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px" }}>
+                    <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px" }}>
+                      <div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>CURRENT STOCK</div>
+                      <div style={{ fontSize: "22px", fontWeight: "800", color: "#0f172a" }}>{item.current_stock ?? 0}</div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>units</div>
+                    </div>
+                    <div style={{ background: "#eff6ff", padding: "12px", borderRadius: "10px" }}>
+                      <div style={{ color: "#2563eb", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>🔮 ML PREDICTED</div>
+                      <div style={{ fontSize: "22px", fontWeight: "800", color: "#1d4ed8" }}>
+                        {item.ml_predicted_demand ?? item.predicted_7_day_demand ?? 0}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>7-day demand</div>
+                    </div>
+                    <div style={{ background: "#fff7ed", padding: "12px", borderRadius: "10px" }}>
+                      <div style={{ color: "#ea580c", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>SAFETY STOCK</div>
+                      <div style={{ fontSize: "22px", fontWeight: "800", color: "#c2410c" }}>
+                        {item.ml_safety_stock ?? item.safety_stock ?? 0}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>buffer units</div>
+                    </div>
+                    {(item.ml_reorder_quantity > 0 || item.reorder_quantity > 0) && (
+                      <div style={{ background: "#fee2e2", padding: "12px", borderRadius: "10px" }}>
+                        <div style={{ color: "#dc2626", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>⚡ REORDER QTY</div>
+                        <div style={{ fontSize: "22px", fontWeight: "800", color: "#b91c1c" }}>
+                          {item.ml_reorder_quantity || item.reorder_quantity}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#94a3b8" }}>units to order</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Insight */}
+                  <div style={{
+                    padding: "10px 14px", borderRadius: "8px",
+                    background: "#f9fafb", border: "1px solid #e2e8f0",
+                    fontSize: "13px", color: "#374151"
+                  }}>
+                    <strong style={{ color: "#1e293b" }}>AI Insight: </strong>
+                    {item.ml_reason || item.reason || "Inventory is at optimal levels."}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Page>
+    );
+  };
 
 
   // ==========================================

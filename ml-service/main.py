@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import logging
+import os
 
 from recommendation import analyze_inventory
 
@@ -28,6 +29,51 @@ try:
     logger.info("✓ CORS enabled")
 except ImportError:
     logger.warning("⚠ flask-cors not installed, CORS disabled")
+
+
+# =========================================================
+# INPUT NORMALIZATION HELPER
+# =========================================================
+
+def normalize_input_data(data):
+    """Normalize input dictionary keys to canonical feature names expected by the model."""
+    if not isinstance(data, dict):
+        return data
+
+    def get_val(*keys, default=None):
+        for k in keys:
+            if k in data and data[k] is not None:
+                return data[k]
+        return default
+
+    # Handle holiday/promotion string ("Yes"/"No" or 1/0)
+    holiday_raw = get_val("Holiday/Promotion", "holiday_promotion", "holidayPromotion", "holiday", default=0)
+    if isinstance(holiday_raw, str):
+        holiday_val = 1 if holiday_raw.strip().lower() in ("yes", "1", "true", "y") else 0
+    else:
+        holiday_val = int(bool(holiday_raw))
+
+    price_val = float(get_val("Price", "price", "sellingPrice", "selling_price", default=100))
+
+    normalized = {
+        "Date": get_val("Date", "date", default=None),
+        "Store ID": str(get_val("Store ID", "store_id", "storeId", default="S001")),
+        "Product ID": str(get_val("Product ID", "product_id", "productId", default="P001")),
+        "Category": str(get_val("Category", "category", default="Groceries")),
+        "Region": str(get_val("Region", "region", default="North")),
+        "Price": price_val,
+        "Cost": float(get_val("Cost", "cost", "costPrice", "cost_price", default=50)),
+        "Discount": float(get_val("Discount", "discount", default=0)),
+        "Competitor Pricing": float(get_val("Competitor Pricing", "competitor_pricing", "competitorPrice", "competitor_price", default=price_val)),
+        "Weather Condition": str(get_val("Weather Condition", "weather_condition", "weatherCondition", default="Clear")),
+        "Seasonality": str(get_val("Seasonality", "seasonality", default="Normal")),
+        "Holiday/Promotion": holiday_val,
+        "Inventory Level": float(get_val("Inventory Level", "inventory_level", "currentInventory", "current_stock", "currentStock", default=0)),
+        "Units_Sold_Lag1": float(get_val("Units_Sold_Lag1", "units_sold_lag1", "unitsSoldYesterday", "units_sold_yesterday", default=0)),
+        "Units_Sold_RollingMean7": float(get_val("Units_Sold_RollingMean7", "units_sold_rolling7", "rolling7DayAverage", "rolling_7_day_average", default=0)),
+        "StoreProduct_AvgDemand": float(get_val("StoreProduct_AvgDemand", "store_product_avg", "storeProductAverage", "store_product_average", default=0))
+    }
+    return normalized
 
 
 # =========================================================
@@ -85,22 +131,9 @@ def home():
 def predict():
     """
     Predict demand and generate inventory recommendation.
-    
-    Expected JSON:
-    {
-        "Date": "YYYY-MM-DD",
-        "Store ID": "S001",
-        "Product ID": "P001",
-        "Category": "Groceries",
-        "Price": 100,
-        "Cost": 50,
-        "Inventory Level": 10,
-        ...
-    }
+    Supports canonical spaced keys, snake_case, or camelCase.
     """
-
     try:
-        # Get JSON data
         data = request.get_json()
 
         if not data:
@@ -111,28 +144,14 @@ def predict():
                 "message": "No JSON data received"
             }), 400
 
-        logger.info(f"Prediction request for product: {data.get('Product ID', 'unknown')}")
-
-        # Validate required fields
-        required_fields = ["Product ID", "Inventory Level"]
-        missing_fields = [
-            field for field in required_fields if field not in data
-        ]
-
-        if missing_fields:
-            logger.warning(f"Missing required fields: {missing_fields}")
-            return jsonify({
-                "status": "error",
-                "code": 400,
-                "message": f"Missing required fields: {', '.join(missing_fields)}"
-            }), 400
+        normalized_data = normalize_input_data(data)
+        logger.info(f"Prediction request for product: {normalized_data.get('Product ID')}")
 
         # Run prediction + recommendation
-        result = analyze_inventory(data)
+        result = analyze_inventory(normalized_data)
 
-        logger.info(f"✓ Prediction successful for {data.get('Product ID')}")
+        logger.info(f"✓ Prediction successful for {normalized_data.get('Product ID')}")
 
-        # Return result
         return jsonify({
             "status": "success",
             "code": 200,
@@ -159,21 +178,14 @@ def predict():
 
 
 # =========================================================
-# BATCH PREDICTION (Optional)
+# BATCH PREDICTION
 # =========================================================
 
 @app.route("/predict-batch", methods=["POST"])
 def predict_batch():
     """
     Predict demand for multiple products.
-    
-    Expected JSON: List of product objects
-    [
-        { "Product ID": "P001", "Inventory Level": 10, ... },
-        { "Product ID": "P002", "Inventory Level": 20, ... }
-    ]
     """
-
     try:
         data = request.get_json()
 
@@ -194,16 +206,17 @@ def predict_batch():
         results = []
         for product_data in data:
             try:
-                result = analyze_inventory(product_data)
+                norm_prod = normalize_input_data(product_data)
+                result = analyze_inventory(norm_prod)
                 results.append({
-                    "product_id": product_data.get("Product ID"),
+                    "product_id": norm_prod.get("Product ID"),
                     "status": "success",
                     "data": result
                 })
             except Exception as e:
                 logger.error(f"Batch prediction error: {str(e)}")
                 results.append({
-                    "product_id": product_data.get("Product ID"),
+                    "product_id": product_data.get("Product ID") or product_data.get("productId"),
                     "status": "error",
                     "message": str(e)
                 })
@@ -228,16 +241,19 @@ def predict_batch():
 # =========================================================
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    host = os.environ.get("HOST", "0.0.0.0")
 
     logger.info("\n" + "="*50)
     logger.info("      DEMANDIQ ML SERVICE STARTING")
     logger.info("="*50)
-    logger.info("Server running on: http://127.0.0.1:5000")
+    logger.info(f"Server running on: http://{host}:{port}")
     logger.info("="*50 + "\n")
 
     app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug=True,
-        use_reloader=True
+        host=host,
+        port=port,
+        debug=False,
+        use_reloader=False
     )
+

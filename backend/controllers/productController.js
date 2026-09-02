@@ -50,6 +50,22 @@ const addProduct = async (req, res) => {
                 customer_id
             });
 
+        // Initialize inventory if quantity or store_id is provided
+        if (product.quantity !== undefined || product.current_stock !== undefined || product.store_id) {
+            try {
+                const inventoryModel = require("../models/inventoryModel");
+                await inventoryModel.createInventory({
+                    customer_id,
+                    product_id: product.product_id,
+                    store_id: product.store_id || "Store-1",
+                    current_stock: Number(product.quantity || product.current_stock || 0),
+                    minimum_stock: Number(product.minimum_stock || 10)
+                });
+            } catch (invErr) {
+                console.warn("Inventory init note:", invErr.message);
+            }
+        }
+
         res.status(201).json({
             success: true,
             message: "Product added successfully",

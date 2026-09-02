@@ -63,21 +63,44 @@ const createSale = async (sale) => {
         ]
     );
 
-    // 3. Deduct stock from Inventory if an inventory record exists for this product & store
-    if (store_id) {
-        await pool.execute(
+    // 3. Deduct stock from Inventory
+    let stockUpdated = false;
+
+    if (store_id && String(store_id).trim()) {
+        const trimmedStore = String(store_id).trim();
+        // Try exact or case-insensitive match on store_id
+        const [storeResult] = await pool.execute(
             `UPDATE inventory 
              SET current_stock = GREATEST(0, current_stock - ?)
-             WHERE customer_id = ? AND product_id = ? AND store_id = ?`,
-            [unitsSold, customer_id, product_id, store_id]
+             WHERE customer_id = ? AND product_id = ? AND (store_id = ? OR LOWER(store_id) = LOWER(?))
+             LIMIT 1`,
+            [unitsSold, customer_id, product_id, trimmedStore, trimmedStore]
         );
-    } else {
-        await pool.execute(
+        if (storeResult.affectedRows > 0) {
+            stockUpdated = true;
+        }
+    }
+
+    // Fallback: If no store-specific inventory matched, update the first inventory entry for this customer & product
+    if (!stockUpdated) {
+        const [fallbackResult] = await pool.execute(
             `UPDATE inventory 
              SET current_stock = GREATEST(0, current_stock - ?)
              WHERE customer_id = ? AND product_id = ?
              LIMIT 1`,
             [unitsSold, customer_id, product_id]
+        );
+        if (fallbackResult.affectedRows > 0) {
+            stockUpdated = true;
+        }
+    }
+
+    // If still no inventory record exists at all for this product, insert one
+    if (!stockUpdated) {
+        await pool.execute(
+            `INSERT INTO inventory (customer_id, product_id, store_id, current_stock, minimum_stock)
+             VALUES (?, ?, ?, 0, 10)`,
+            [customer_id, product_id, store_id || "Store-1"]
         );
     }
 
