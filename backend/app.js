@@ -17,17 +17,30 @@ const app = express();
 // MIDDLEWARE
 // ===============================
 
-app.use(cors());
+const corsOrigin = process.env.CORS_ORIGIN || "*";
+app.use(cors({
+    origin: corsOrigin === "*" ? true : corsOrigin.split(",").map(s => s.trim()),
+    credentials: true
+}));
 app.use(express.json());
 
 // ===============================
-// HOME
+// HEALTH & ROOT CHECK
 // ===============================
 
 app.get("/", (req, res) => {
     res.json({
         success: true,
-        message: "DemandIQ Backend is running!"
+        message: "DemandIQ Backend is running!",
+        environment: process.env.NODE_ENV || "development"
+    });
+});
+
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        status: "healthy",
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
     });
 });
 

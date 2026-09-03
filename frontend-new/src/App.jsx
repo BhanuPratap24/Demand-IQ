@@ -1,23 +1,7 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from "react";
 import "./App.css";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import Dashboard from "./pages/Dashboard";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
-
-// ==========================================
-// PROTECTED ROUTE COMPONENT
-// ==========================================
-
-function ProtectedRoute({ children }) {
-    const token = localStorage.getItem('demandiq_token') || localStorage.getItem('token');
-    if (!token) {
-        return <Navigate to="/login" />;
-    }
-    return children;
-}
 
 // ==========================================
 // MAIN APP COMPONENT

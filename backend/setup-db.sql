@@ -3,9 +3,6 @@
 -- Run this script in MySQL to create all tables
 -- =============================================
 
-CREATE DATABASE IF NOT EXISTS demandiq;
-USE demandiq;
-
 -- =============================================
 -- CUSTOMERS / USERS TABLE
 -- =============================================
