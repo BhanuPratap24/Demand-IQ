@@ -5,7 +5,7 @@ const JWT_SECRET =
 
 const authMiddleware = (req, res, next) => {
 
-    console.log("========== AUTH MIDDLEWARE HIT ==========");
+    console.log(" AUTH MIDDLEWARE HIT =");
 
     try {
 
@@ -14,7 +14,7 @@ const authMiddleware = (req, res, next) => {
         console.log("AUTH HEADER EXISTS:", !!authHeader);
 
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            console.log("❌ NO BEARER TOKEN");
+            console.log(" NO BEARER TOKEN");
 
             return res.status(401).json({
                 success: false,
@@ -34,7 +34,7 @@ const authMiddleware = (req, res, next) => {
         };
 
         console.log(
-            "✅ AUTH OK - Customer ID:",
+            " AUTH OK - Customer ID:",
             req.user.customer_id
         );
 
@@ -43,7 +43,7 @@ const authMiddleware = (req, res, next) => {
     } catch (error) {
 
         console.error(
-            "❌ AUTH ERROR:",
+            " AUTH ERROR:",
             error.message
         );
 
