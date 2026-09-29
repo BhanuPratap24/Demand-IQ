@@ -1,9 +1,5 @@
 const pool = require("../config/db");
 
-// =====================================
-// CREATE PRODUCT
-// =====================================
-
 const createProduct = async (product) => {
 
     const sql = `
@@ -34,10 +30,6 @@ const createProduct = async (product) => {
 };
 
 
-// =====================================
-// GET ALL PRODUCTS (BY CUSTOMER)
-// =====================================
-
 const getProducts = async (customerId) => {
 
     const [rows] = await pool.execute(
@@ -48,10 +40,6 @@ const getProducts = async (customerId) => {
     return rows;
 };
 
-
-// =====================================
-// GET PRODUCT BY ID (GLOBAL)
-// =====================================
 
 const getProductById = async (productId) => {
 
@@ -64,9 +52,6 @@ const getProductById = async (productId) => {
 };
 
 
-// =====================================
-// GET PRODUCT BY CUSTOMER + PRODUCT_ID
-// =====================================
 
 const getCustomerProduct = async (customerId, productId) => {
 
@@ -78,10 +63,6 @@ const getCustomerProduct = async (customerId, productId) => {
     return rows[0];
 };
 
-
-// =====================================
-// EXPORT
-// =====================================
 
 module.exports = {
     createProduct,
