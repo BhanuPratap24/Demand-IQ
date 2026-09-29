@@ -5,9 +5,6 @@ import numpy as np
 import logging
 
 
-# =========================================================
-# LOGGING CONFIGURATION
-# =========================================================
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,9 +13,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# =========================================================
-# PATH
-# =========================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -27,11 +21,6 @@ MODEL_PATH = os.path.join(
     "models",
     "demand_model.pkl"
 )
-
-
-# =========================================================
-# LOAD TRAINED MODEL
-# =========================================================
 
 try:
     if not os.path.exists(MODEL_PATH):
@@ -47,9 +36,6 @@ except Exception as e:
     raise
 
 
-# =========================================================
-# FEATURE VALIDATION
-# =========================================================
 
 REQUIRED_FEATURES = {
     "categorical": [
@@ -89,10 +75,6 @@ def validate_features(data):
     return len(missing_features) == 0
 
 
-# =========================================================
-# PREDICT DEMAND
-# =========================================================
-
 def predict_demand(data):
     """
     Predict product demand using the trained XGBoost/Random
@@ -131,9 +113,7 @@ def predict_demand(data):
         # Store original data shape for logging
         original_rows = len(data)
 
-        # -----------------------------------------------------
-        # Date conversion
-        # -----------------------------------------------------
+      
 
         if "Date" in data.columns:
             try:
@@ -164,10 +144,7 @@ def predict_demand(data):
             data["DayOfWeek"] = data["Date"].dt.dayofweek
             data["IsWeekend"] = 0
 
-        # -----------------------------------------------------
-        # Fill missing forecasting features
-        # -----------------------------------------------------
-
+     
         feature_defaults = {
             "Units_Sold_Lag1": 0,
             "Units_Sold_RollingMean7": 0,
@@ -187,16 +164,9 @@ def predict_demand(data):
                     errors="coerce"
                 ).fillna(default_value)
 
-        # -----------------------------------------------------
-        # Validate features
-        # -----------------------------------------------------
 
         if not validate_features(data):
             logger.warning("⚠ Some features are missing, using defaults")
-
-        # -----------------------------------------------------
-        # Make prediction
-        # -----------------------------------------------------
 
         logger.info(f"Running prediction on {original_rows} sample(s)...")
 
@@ -213,10 +183,6 @@ def predict_demand(data):
         logger.error(f"✗ Prediction failed: {str(e)}")
         raise ValueError(f"Prediction error: {str(e)}")
 
-
-# =========================================================
-# TEST
-# =========================================================
 
 
 if __name__ == "__main__":
@@ -262,11 +228,11 @@ if __name__ == "__main__":
     )
 
 
-    print("\n===================================")
+    print("\n======")
 
     print("DEMANDIQ DEMAND PREDICTION")
 
-    print("===================================")
+    print("====")
 
     print(
         "Product:",
