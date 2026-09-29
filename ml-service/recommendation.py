@@ -9,16 +9,9 @@ sys.path.insert(0, BASE_DIR)
 from predict import predict_demand
 
 
-# =========================================================
-# LOGGING CONFIGURATION
-# =========================================================
-
 logger = logging.getLogger(__name__)
 
 
-# =========================================================
-# INVENTORY RECOMMENDATION
-# =========================================================
 
 def get_inventory_recommendation(
     predicted_demand,
@@ -53,9 +46,7 @@ def get_inventory_recommendation(
         # Difference between required and current stock
         stock_difference = required_stock - current_stock
 
-        # -----------------------------------------------------
-        # Recommendation logic
-        # -----------------------------------------------------
+   
 
         if current_stock <= 0:
 
@@ -105,9 +96,6 @@ def get_inventory_recommendation(
         raise ValueError(f"Recommendation generation error: {str(e)}")
 
 
-# =========================================================
-# COMPLETE AI RECOMMENDATION
-# =========================================================
 
 def analyze_inventory(product_data):
     """
@@ -158,11 +146,6 @@ def analyze_inventory(product_data):
         raise ValueError(f"Analysis error: {str(e)}")
 
 
-
-# =========================================================
-# TEST
-# =========================================================
-
 if __name__ == "__main__":
 
     sample_product = {
@@ -204,9 +187,9 @@ if __name__ == "__main__":
         sample_product
     )
 
-    print("\n===================================")
+    print("\n=====")
     print("      DEMANDIQ AI RECOMMENDATION")
-    print("===================================")
+    print("=====")
 
     print(
         "Product:",
