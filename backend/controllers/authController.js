@@ -7,10 +7,6 @@ const JWT_SECRET =
     process.env.JWT_SECRET || "demandiq_super_secret_2026";
 
 
-// =============================
-// SIGN UP
-// =============================
-
 const signup = async (req, res) => {
     try {
         const {
@@ -93,10 +89,6 @@ const signup = async (req, res) => {
     }
 };
 
-
-// =============================
-// LOGIN
-// =============================
 const login = async (req, res) => {
     try {
         const {
@@ -172,9 +164,7 @@ const login = async (req, res) => {
         });
     }
 };
-// =============================
-// GET CUSTOMER PROFILE
-// =============================
+
 const getProfile = async (req, res) => {
     try {
         const customerId = req.user.customer_id;
@@ -215,9 +205,6 @@ const getProfile = async (req, res) => {
 };
 
 
-// =============================
-// UPDATE CUSTOMER PROFILE
-// =============================
 const updateProfile = async (req, res) => {
     try {
         const customerId = req.user.customer_id;
@@ -283,9 +270,6 @@ const updateProfile = async (req, res) => {
 
 
 
-// =============================
-// RESET / FORGOT PASSWORD
-// =============================
 const resetPassword = async (req, res) => {
     try {
         const { email, new_password } = req.body;
