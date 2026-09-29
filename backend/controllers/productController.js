@@ -1,9 +1,5 @@
 const Product = require("../models/productModel");
 
-// =====================================
-// ADD PRODUCT
-// =====================================
-
 const addProduct = async (req, res) => {
     try {
 
@@ -18,16 +14,12 @@ const addProduct = async (req, res) => {
             });
         }
 
-        // =====================================
-        // CHECK IF PRODUCT ALREADY EXISTS
-        // =====================================
+      
 
         const existingProduct =
             await Product.getCustomerProduct(customer_id, product.product_id);
 
-        // =====================================
-        // PRODUCT ALREADY EXISTS
-        // =====================================
+    
 
         if (existingProduct) {
 
@@ -40,9 +32,6 @@ const addProduct = async (req, res) => {
             });
         }
 
-        // =====================================
-        // CREATE NEW PRODUCT
-        // =====================================
 
         const result =
             await Product.createProduct({
@@ -50,7 +39,6 @@ const addProduct = async (req, res) => {
                 customer_id
             });
 
-        // Initialize inventory if quantity or store_id is provided
         if (product.quantity !== undefined || product.current_stock !== undefined || product.store_id) {
             try {
                 const inventoryModel = require("../models/inventoryModel");
@@ -89,9 +77,6 @@ const addProduct = async (req, res) => {
 };
 
 
-// =====================================
-// GET ALL PRODUCTS
-// =====================================
 
 const getProducts = async (req, res) => {
 
@@ -124,9 +109,6 @@ const getProducts = async (req, res) => {
 };
 
 
-// =====================================
-// GET SINGLE PRODUCT
-// =====================================
 
 const getProduct = async (req, res) => {
 
@@ -170,9 +152,6 @@ const getProduct = async (req, res) => {
 };
 
 
-// =====================================
-// EXPORT
-// =====================================
 
 module.exports = {
     addProduct,
