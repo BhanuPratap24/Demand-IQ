@@ -1,9 +1,5 @@
 const pool = require("../config/db");
 
-// =====================================
-// DASHBOARD SUMMARY (CUSTOMER-SCOPED)
-// =====================================
-
 const getSummary = async (customerId) => {
     const [products] = await pool.execute(`
         SELECT COUNT(*) AS total_products
@@ -41,9 +37,6 @@ const getSummary = async (customerId) => {
 };
 
 
-// =====================================
-// TOP PRODUCTS (CUSTOMER-SCOPED)
-// =====================================
 
 const getTopProducts = async (customerId) => {
     const [rows] = await pool.execute(`
@@ -71,9 +64,6 @@ const getTopProducts = async (customerId) => {
 };
 
 
-// =====================================
-// SALES TREND (CUSTOMER-SCOPED)
-// =====================================
 
 const getSalesTrend = async (customerId) => {
     const [rows] = await pool.execute(`
@@ -91,10 +81,6 @@ const getSalesTrend = async (customerId) => {
     return rows;
 };
 
-
-// =====================================
-// LOW STOCK PRODUCTS (CUSTOMER-SCOPED)
-// =====================================
 
 const getLowStock = async (customerId) => {
     const [rows] = await pool.execute(`
@@ -117,9 +103,6 @@ const getLowStock = async (customerId) => {
 };
 
 
-// =====================================
-// STORE PERFORMANCE (CUSTOMER-SCOPED)
-// =====================================
 
 const getStorePerformance = async (customerId) => {
     const [rows] = await pool.execute(`
@@ -145,4 +128,4 @@ module.exports = {
     getSalesTrend,
     getLowStock,
     getStorePerformance
-};
+};
