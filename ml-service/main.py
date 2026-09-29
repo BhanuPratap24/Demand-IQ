@@ -5,9 +5,6 @@ import os
 from recommendation import analyze_inventory
 
 
-# =========================================================
-# LOGGING CONFIGURATION
-# =========================================================
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,9 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# =========================================================
-# FLASK APP
-# =========================================================
+
 
 app = Flask(__name__)
 
@@ -31,9 +26,6 @@ except ImportError:
     logger.warning("⚠ flask-cors not installed, CORS disabled")
 
 
-# =========================================================
-# INPUT NORMALIZATION HELPER
-# =========================================================
 
 def normalize_input_data(data):
     """Normalize input dictionary keys to canonical feature names expected by the model."""
@@ -76,9 +68,6 @@ def normalize_input_data(data):
     return normalized
 
 
-# =========================================================
-# ERROR HANDLERS
-# =========================================================
 
 @app.errorhandler(400)
 def bad_request(error):
@@ -102,11 +91,6 @@ def internal_error(error):
         "details": str(error)
     }), 500
 
-
-# =========================================================
-# HOME / HEALTH CHECK
-# =========================================================
-
 @app.route("/", methods=["GET"])
 def home():
     """Health check endpoint."""
@@ -123,9 +107,6 @@ def home():
     }), 200
 
 
-# =========================================================
-# INVENTORY ANALYSIS API
-# =========================================================
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -177,9 +158,6 @@ def predict():
         }), 500
 
 
-# =========================================================
-# BATCH PREDICTION
-# =========================================================
 
 @app.route("/predict-batch", methods=["POST"])
 def predict_batch():
@@ -236,9 +214,6 @@ def predict_batch():
         }), 500
 
 
-# =========================================================
-# RUN SERVER
-# =========================================================
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
