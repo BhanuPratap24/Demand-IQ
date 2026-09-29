@@ -13,9 +13,7 @@ const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
-// ===============================
-// MIDDLEWARE
-// ===============================
+
 
 const corsOrigin = process.env.CORS_ORIGIN || "*";
 app.use(cors({
@@ -24,9 +22,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// ===============================
-// HEALTH & ROOT CHECK
-// ===============================
 
 app.get("/", (req, res) => {
     res.json({
@@ -44,10 +39,6 @@ app.get("/health", (req, res) => {
     });
 });
 
-// ===============================
-// API ROUTES
-// ===============================
-
 app.use("/api/products", productRoutes);
 
 app.use("/api/inventory", inventoryRoutes);
@@ -60,10 +51,6 @@ app.use("/api/recommendations", recommendationRoutes);
 
 app.use("/api/alerts", alertsRoutes);
 app.use("/api/auth", authRoutes);
-
-// ===============================
-// SERVER
-// ===============================
 
 const PORT = process.env.PORT || 3000;
 
