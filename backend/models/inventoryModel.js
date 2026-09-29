@@ -1,9 +1,5 @@
 const pool = require("../config/db");
 
-// =====================================
-// GET CUSTOMER PRODUCT (CHECK OWNERSHIP)
-// =====================================
-
 const getCustomerProduct = async (customer_id, product_id) => {
 
     const [rows] = await pool.execute(
@@ -16,9 +12,6 @@ const getCustomerProduct = async (customer_id, product_id) => {
 };
 
 
-// =====================================
-// CREATE INVENTORY
-// =====================================
 
 const createInventory = async (inventory) => {
 
@@ -46,9 +39,7 @@ const createInventory = async (inventory) => {
 };
 
 
-// =====================================
-// GET OWN INVENTORY ONLY
-// =====================================
+
 
 const getInventory = async (customerId) => {
 
@@ -74,9 +65,6 @@ const getInventory = async (customerId) => {
 };
 
 
-// =====================================
-// GET PRODUCT INVENTORY - OWN ONLY
-// =====================================
 
 const getInventoryByProduct = async (
     productId,
@@ -100,9 +88,6 @@ const getInventoryByProduct = async (
 };
 
 
-// =====================================
-// UPDATE STOCK - PURE MODEL FUNCTION
-// =====================================
 
 const updateStock = async (
     id,
