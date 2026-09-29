@@ -1,9 +1,4 @@
 const analyticsModel = require("../models/analyticsModel");
-
-// =====================================
-// DASHBOARD SUMMARY
-// =====================================
-
 const getSummary = async (req, res) => {
     try {
         const customer_id = req.user.customer_id;
@@ -25,10 +20,6 @@ const getSummary = async (req, res) => {
     }
 };
 
-
-// =====================================
-// TOP PRODUCTS
-// =====================================
 
 const getTopProducts = async (req, res) => {
     try {
@@ -53,10 +44,6 @@ const getTopProducts = async (req, res) => {
 };
 
 
-// =====================================
-// SALES TREND
-// =====================================
-
 const getSalesTrend = async (req, res) => {
     try {
         const customer_id = req.user.customer_id;
@@ -80,10 +67,6 @@ const getSalesTrend = async (req, res) => {
 };
 
 
-// =====================================
-// LOW STOCK
-// =====================================
-
 const getLowStock = async (req, res) => {
     try {
         const customer_id = req.user.customer_id;
@@ -106,10 +89,6 @@ const getLowStock = async (req, res) => {
     }
 };
 
-
-// =====================================
-// STORE PERFORMANCE
-// =====================================
 
 const getStorePerformance = async (req, res) => {
     try {
@@ -140,4 +119,4 @@ module.exports = {
     getSalesTrend,
     getLowStock,
     getStorePerformance
-};
+};
