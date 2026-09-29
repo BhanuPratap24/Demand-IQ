@@ -1,9 +1,6 @@
 const recommendationModel = require("../models/recommendationModel");
 const { predictDemand } = require("../services/mlService");
 
-// =====================================
-// ALL RECOMMENDATIONS (WITH ML - USER SCOPED)
-// =====================================
 
 const getRecommendations = async (req, res) => {
     try {
@@ -88,9 +85,7 @@ const getRecommendations = async (req, res) => {
 };
 
 
-// =====================================
-// PRODUCT RECOMMENDATION (WITH ML)
-// =====================================
+
 
 const getRecommendationByProduct = async (req, res) => {
     try {
@@ -164,9 +159,7 @@ const getRecommendationByProduct = async (req, res) => {
 };
 
 
-// =====================================
-// DIRECT ML PREDICTION (NO DB HISTORY NEEDED)
-// =====================================
+
 
 const predictNow = async (req, res) => {
     try {
