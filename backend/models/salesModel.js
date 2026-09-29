@@ -1,8 +1,5 @@
 const pool = require("../config/db");
 
-// =====================================
-// CREATE SALE (CUSTOMER-SCOPED)
-// =====================================
 
 const createSale = async (sale) => {
     const {
@@ -81,7 +78,6 @@ const createSale = async (sale) => {
         }
     }
 
-    // Fallback: If no store-specific inventory matched, update the first inventory entry for this customer & product
     if (!stockUpdated) {
         const [fallbackResult] = await pool.execute(
             `UPDATE inventory 
@@ -95,7 +91,6 @@ const createSale = async (sale) => {
         }
     }
 
-    // If still no inventory record exists at all for this product, insert one
     if (!stockUpdated) {
         await pool.execute(
             `INSERT INTO inventory (customer_id, product_id, store_id, current_stock, minimum_stock)
@@ -112,10 +107,6 @@ const createSale = async (sale) => {
 };
 
 
-// =====================================
-// GET ALL SALES (CUSTOMER-SCOPED)
-// =====================================
-
 const getSales = async (customerId) => {
     const [rows] = await pool.execute(
         `SELECT s.*, p.product_name, p.category
@@ -131,9 +122,6 @@ const getSales = async (customerId) => {
 };
 
 
-// =====================================
-// GET SALES BY PRODUCT (CUSTOMER-SCOPED)
-// =====================================
 
 const getSalesByProduct = async (customerId, productId) => {
     const [rows] = await pool.execute(
@@ -150,9 +138,6 @@ const getSalesByProduct = async (customerId, productId) => {
 };
 
 
-// =====================================
-// GET SALES BY STORE (CUSTOMER-SCOPED)
-// =====================================
 
 const getSalesByStore = async (customerId, storeId) => {
     const [rows] = await pool.execute(
@@ -174,4 +159,4 @@ module.exports = {
     getSales,
     getSalesByProduct,
     getSalesByStore
-};
+};
