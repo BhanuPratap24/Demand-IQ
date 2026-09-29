@@ -1,13 +1,10 @@
 const inventoryModel = require("../models/inventoryModel");
 
-// =====================================
-// CREATE / ADD INVENTORY
-// =====================================
 
 const createInventory = async (req, res) => {
     try {
 
-        // JWT से customer ID
+       
         const customer_id = req.user.customer_id;
 
         const {
@@ -33,9 +30,7 @@ const createInventory = async (req, res) => {
             });
         }
 
-        // =====================================
-        // CHECK PRODUCT BELONGS TO CUSTOMER
-        // =====================================
+      
 
         const product =
             await inventoryModel.getCustomerProduct(
@@ -53,9 +48,6 @@ const createInventory = async (req, res) => {
             });
         }
 
-        // =====================================
-        // CHECK EXISTING INVENTORY
-        // =====================================
 
         const existingInventory =
             await inventoryModel.getInventoryByProduct(
@@ -67,9 +59,7 @@ const createInventory = async (req, res) => {
             item => String(item.store_id) === String(store_id)
         );
 
-        // =====================================
-        // EXISTING INVENTORY
-        // =====================================
+     
 
         if (inventory) {
 
@@ -95,9 +85,6 @@ const createInventory = async (req, res) => {
             });
         }
 
-        // =====================================
-        // CREATE NEW INVENTORY
-        // =====================================
 
         const result =
             await inventoryModel.createInventory({
@@ -136,9 +123,6 @@ const createInventory = async (req, res) => {
 };
 
 
-// =====================================
-// GET ALL INVENTORY
-// =====================================
 
 const getInventory = async (req, res) => {
 
@@ -173,9 +157,7 @@ const getInventory = async (req, res) => {
 };
 
 
-// =====================================
-// GET INVENTORY BY PRODUCT
-// =====================================
+
 
 const getInventoryByProduct = async (req, res) => {
 
@@ -211,10 +193,6 @@ const getInventoryByProduct = async (req, res) => {
     }
 };
 
-
-// =====================================
-// UPDATE STOCK
-// =====================================
 
 const updateStock = async (req, res) => {
 
