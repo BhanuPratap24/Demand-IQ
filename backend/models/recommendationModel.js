@@ -1,8 +1,6 @@
 const pool = require("../config/db");
 
-// =====================================
-// GET PRODUCT RECOMMENDATIONS (CUSTOMER-SCOPED)
-// =====================================
+
 
 const getRecommendations = async (customerId) => {
     const [rows] = await pool.execute(`
@@ -135,9 +133,6 @@ const getRecommendations = async (customerId) => {
 };
 
 
-// =====================================
-// GET SINGLE PRODUCT RECOMMENDATION
-// =====================================
 
 const getRecommendationByProduct = async (customerId, productId) => {
     const recommendations = await getRecommendations(customerId);
@@ -148,4 +143,4 @@ const getRecommendationByProduct = async (customerId, productId) => {
 module.exports = {
     getRecommendations,
     getRecommendationByProduct
-};
+};
