@@ -1,8 +1,5 @@
 import axios from 'axios';
 
-// ==========================================
-// API CLIENT CONFIGURATION
-// ==========================================
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -26,9 +23,6 @@ apiClient.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// ==========================================
-// AUTH ENDPOINTS
-// ==========================================
 
 export const authAPI = {
     signup: (data) => apiClient.post('/auth/signup', data),
@@ -49,9 +43,7 @@ export const productAPI = {
     delete: (id) => apiClient.delete(`/products/${id}`)
 };
 
-// ==========================================
-// INVENTORY ENDPOINTS
-// ==========================================
+
 
 export const inventoryAPI = {
     getAll: () => apiClient.get('/inventory'),
@@ -60,28 +52,19 @@ export const inventoryAPI = {
     updateStock: (id, data) => apiClient.put(`/inventory/${id}`, data)
 };
 
-// ==========================================
-// SALES ENDPOINTS
-// ==========================================
-
 export const salesAPI = {
     getAll: () => apiClient.get('/sales'),
     getBySales: (saleId) => apiClient.get(`/sales/${saleId}`),
     record: (data) => apiClient.post('/sales', data)
 };
 
-// ==========================================
-// PREDICTIONS & RECOMMENDATIONS
-// ==========================================
+
 
 export const recommendationAPI = {
     getAll: () => apiClient.get('/recommendations'),
     predict: (data) => apiClient.post('/recommendations/predict', data)
 };
 
-// ==========================================
-// ANALYTICS ENDPOINTS
-// ==========================================
 
 export const analyticsAPI = {
     getSummary: () => apiClient.get('/analytics/summary'),
@@ -89,9 +72,6 @@ export const analyticsAPI = {
     getMetrics: () => apiClient.get('/analytics/metrics')
 };
 
-// ==========================================
-// ALERTS ENDPOINTS
-// ==========================================
 
 export const alertsAPI = {
     getAll: () => apiClient.get('/alerts'),
