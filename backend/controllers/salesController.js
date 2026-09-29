@@ -1,8 +1,6 @@
 const salesModel = require("../models/salesModel");
 
-// =====================================
-// CREATE SALE
-// =====================================
+
 
 const createSale = async (req, res) => {
     try {
@@ -78,9 +76,6 @@ const createSale = async (req, res) => {
 };
 
 
-// =====================================
-// GET ALL SALES
-// =====================================
 
 const getSales = async (req, res) => {
     try {
@@ -105,10 +100,6 @@ const getSales = async (req, res) => {
 };
 
 
-// =====================================
-// GET SALES BY PRODUCT
-// =====================================
-
 const getSalesByProduct = async (req, res) => {
     try {
         const customer_id = req.user.customer_id;
@@ -131,10 +122,6 @@ const getSalesByProduct = async (req, res) => {
     }
 };
 
-
-// =====================================
-// GET SALES BY STORE
-// =====================================
 
 const getSalesByStore = async (req, res) => {
     try {
@@ -164,4 +151,4 @@ module.exports = {
     getSales,
     getSalesByProduct,
     getSalesByStore
-};
+};
