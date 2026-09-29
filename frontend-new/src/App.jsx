@@ -3,9 +3,6 @@ import "./App.css";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
-// ==========================================
-// MAIN APP COMPONENT
-// ==========================================
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(
@@ -41,9 +38,6 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
-  // ==========================================
-  // DASHBOARD STATE
-  // ==========================================
 
   const [page, setPage] = useState("dashboard");
 
@@ -60,9 +54,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // ==========================================
-  // HELPERS
-  // ==========================================
 
   const money = (value) =>
     `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -72,9 +63,6 @@ function App() {
     return [];
   };
 
-  // ==========================================
-  // AUTH
-  // ==========================================
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -144,9 +132,6 @@ function App() {
     }
   };
 
-  // ==========================================
-  // FORGOT / RESET PASSWORD HANDLER
-  // ==========================================
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
@@ -225,9 +210,6 @@ function App() {
   };
 
 
-  // ==========================================
-  // LOAD ALL DATA
-  // ==========================================
 
   const fetchData = async () => {
     try {
@@ -323,9 +305,6 @@ function App() {
   };
 
 
-  // ==========================================
-  // AUTH -> DASHBOARD
-  // ==========================================
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -335,9 +314,6 @@ function App() {
     }
   }, [isLoggedIn]);
 
-  // ==========================================
-  // LOGIN / SIGNUP SCREEN
-  // ==========================================
 
   if (!isLoggedIn) {
     return (
@@ -359,9 +335,7 @@ function App() {
           </p>
 
           {authMode === "forgot" ? (
-            /* ========================================== */
-            /* FORGOT / RESET PASSWORD FORM              */
-            /* ========================================== */
+            
             <form onSubmit={handleForgotPassword}>
               <p style={{ fontSize: "13px", color: "#9ca3af", textAlign: "center", marginBottom: "16px", lineHeight: "1.5" }}>
                 Enter your registered email and choose a new password.
@@ -456,9 +430,7 @@ function App() {
               </div>
             </form>
           ) : (
-            /* ========================================== */
-            /* LOGIN & SIGNUP FORM                       */
-            /* ========================================== */
+            
             <form onSubmit={handleAuth}>
 
               {authMode === "signup" && (
@@ -616,10 +588,6 @@ function App() {
   }
 
 
-  // ==========================================
-  // NAVIGATION
-  // ==========================================
-
   const navItems = [
     {
       id: "dashboard",
@@ -654,9 +622,7 @@ function App() {
   ];
 
 
-  // ==========================================
-  // LOADING
-  // ==========================================
+
 
   if (loading) {
     return (
@@ -674,9 +640,7 @@ function App() {
     );
   }
 
-  // ==========================================
-  // ERROR
-  // ==========================================
+ 
 
   if (error) {
     return (
@@ -716,9 +680,7 @@ function App() {
     );
   }
 
-  // ==========================================
-  // DASHBOARD
-  // ==========================================
+  
 
   const Dashboard = () => (
     <>
